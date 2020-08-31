@@ -1,8 +1,3 @@
-
-
-
-
-# nie dzialaaaaaaaaaaaaaaaaaaaaaaaa
 #install CATALYST package 
 
 if(!require("CATALYST")){
@@ -39,7 +34,7 @@ dir.exists(rawDir)
 # Bead normalization -----------------------------------------------------------
 #--------------------------------------------------------------------------------
 
-# set bead normalization directory 
+# set bead normalization directory where normalized fcs files will be saved
 beadNormDir <- file.path(dir, "BeadNorm")
 if(!dir.exists(beadNormDir)) dir.create(beadNormDir)
 
@@ -57,15 +52,8 @@ for (file in files){
   
   # at this point for further analysis you can select only the markers the 
   # markers neccessary for the analysis, this will reduce the size of your data
-  channels_to_keep <- c(grep("Time", colnames(ff)),
-                        grep("Event_length", colnames(ff)),
-                        grep("Pd", colnames(ff)),
-                        grep("Ir", colnames(ff)),
-                        grep("Ce140Di", colnames(ff)),
-                        grep("Center", colnames(ff)),
-                        grep("Offset", colnames(ff)),
-                        grep("Width", colnames(ff)),
-                        grep("Residual", colnames(ff)),
+  channels_to_keep <- c(grep("Time|Event_length|Pd|Ir|Ce140|Center|Offset|Width|Residual",
+                             colnames(ff)),
                         grep("_", get_markers(ff, colnames(ff))))
   channels_to_keep <- colnames(ff)[sort(unique(channels_to_keep))]
   
@@ -80,11 +68,11 @@ for (file in files){
                         k = 80,
                         plot = TRUE)
   
-  # convert to .fcs files and save 
+  # convert back to .fcs files and save 
   ff <- sce2fcs(dat_norm$data)
   write.FCS(ff, file.path(beadNormDir, sub_dir, gsub(".FCS","_beadNormDir.fcs", file)))
   
-  # plot diagnostic plots 
+  # plot and save diagnostic plots 
   dat_norm$scatter
   ggsave(filename = file.path(beadNormDir, sub_dir, gsub(".FCS","_beadGate.png", file)))
   dat_norm$lines
