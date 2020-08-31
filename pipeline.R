@@ -1,11 +1,15 @@
 
+
+
+
+# nie dzialaaaaaaaaaaaaaaaaaaaaaaaa
 #install CATALYST package 
 
 if(!require("CATALYST")){
   BiocManager::install("CATALYST")
   library(CATALYST)
 }
-
+#
 if(!require("flowDensity")){
   BiocManager::install("flowDensity")
   library(flowDensity)
@@ -36,7 +40,6 @@ dir.exists(rawDir)
 #--------------------------------------------------------------------------------
 
 # set bead normalization directory 
-
 beadNormDir <- file.path(dir, "BeadNorm")
 if(!dir.exists(beadNormDir)) dir.create(beadNormDir)
 
@@ -52,8 +55,8 @@ for (file in files){
   
   ff <- read.FCS(file.path(rawDir, file))
   
-  # at this point you can select only the neede marker for the analysis this will 
-  # significantly reduce the size of your data
+  # at this point for further analysis you can select only the markers the 
+  # markers neccessary for the analysis, this will reduce the size of your data
   channels_to_keep <- c(grep("Time", colnames(ff)),
                         grep("Event_length", colnames(ff)),
                         grep("Pd", colnames(ff)),
