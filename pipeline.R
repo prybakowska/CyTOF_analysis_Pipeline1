@@ -1,45 +1,7 @@
-#install CATALYST package 
 
-if (!requireNamespace("BiocManager", quietly = TRUE))
-  install.packages("BiocManager")
+source('~/Documents/CyTOF_workflow/CytofPipeline1/instalation.R')
+source('~/Documents/CyTOF_workflow/CytofPipeline1/functions.R')
 
-if(!require("CATALYST")){
-  BiocManager::install("CATALYST")
-  library(CATALYST)
-}
-#
-if(!require("flowDensity")){
-  BiocManager::install("flowDensity")
-  library(flowDensity)
-}
-
-library(flowCore)
-library(FlowSOM)
-library(SingleCellExperiment)
-library(ggplot2)
-
-
-if(!require("remotes")){
-  install.packages("remotes")
-  library(remotes)
-}
-
-if(!require("CytoNorm")){
-  remotes::install_github("saeyslab/CytoNorm")
-  library(CytoNorm)
-}
-
-if(!require("flowAI")){
-  BiocManager::install("flowAI")
-  library(flowAI)
-}
-
-BiocManager::install(version='devel')
-
-if(!require("flowCut")){
-  BiocManager::install("flowCut")
-  library(flowCut)
-}
 
 # set data directory and subdirectories and locate and unzip the data 
 
@@ -60,21 +22,37 @@ dir.exists(raw_data_dir)
 # Bead normalization -----------------------------------------------------------
 #-------------------------------------------------------------------------------
 
-# set directory where normalized fcs files will be saved
+# set directory 
+dir <- "/home/paulina/Documents/CyTOF_workflow/data"
+
+# # set directory where bead-normalized fcs files will be saved
 bead_norm_dir <- file.path(dir, "BeadNorm")
 if(!dir.exists(bead_norm_dir)) dir.create(bead_norm_dir)
+
+# set files input directory
+raw_data_dir <- file.path(dir, "RawFiles")
 
 # define sample to which all the files should be normalized and read in flowframe
 ff_ref <- read.FCS(file.path(raw_data_dir, "181129_RUN1_01.FCS"))
 
-# Define which files will be normalized
+# define which files will be normalized
 files <- list.files(file.path(raw_data_dir), pattern = ".FCS$")
 
 for (file in files){
   print(paste0("   ", Sys.time()))
   print(paste0("   Normalizing ", file))
   
+  # read flow frame
   ff <- read.FCS(file.path(raw_data_dir, file))
+  
+  ff <- bead_normalize()
+  
+  
+  
+  
+  
+  
+  
   
   # at this point for further analysis you can select only the markers
   # necessary for the analysis, this will reduce the size of your data
@@ -110,52 +88,37 @@ for (file in files){
 # Signal Cleaning --------------------------------------------------------------
 #-------------------------------------------------------------------------------
 
+# set directory 
+dir <- "/home/paulina/Documents/CyTOF_workflow/data"
+
 # set directory where cleaned fcs files will be saved
 clean_dir <- file.path(dir, "Cleaned")
 if(!dir.exists(clean_dir)) dir.create(clean_dir)
+
+# set files input directory
+bead_norm_dir <- file.path(dir, "BeadNorm")
 
 # Define which files will be normalized
 files <- list.files(file.path(bead_norm_dir), pattern = "_beadNorm.fcs$")
 
 for (file in files) {
   
-  # read fcs files and arcshinh transform 
-  ff <- read.FCS(file.path(bead_norm_dir,file), transformation = FALSE)
-  
-  # find mass channels
-  channels_to_transform <- find_mass_ch(ff)
-  
-  #transfrom mass channels
-  ff_t <- transform(ff, transformList(channels_to_transform, cytofTransform))
+  # read fcs file
+  ff <- read.FCS(file.path(bead_norm_dir, file), transformation = FALSE)
   
   # norm_not_na <- which(apply(ff_t@exprs, 1, function(x){all(!is.na(x))}))
   # ff_t <- ff_t[norm_not_na, ]
   
-  # clean Flow Rate 
-  cleaned_data <- clean_flow_rate(flow_frame = ff_t, out_dir = clean_dir, plot_rate = TRUE) 
+  # clean Flow Rate and signal instability
+  ff <- clean_flow_rate(flow_frame = ff, out_dir = clean_dir, 
+                                to_plot = TRUE)
   
-  channels_to_clean <- c(grep("Event_length", colnames(ff)),
-                         grep("Ce140Di", colnames(ff)))
-  
-  flowCut_res <- flowCut(cleaned_data$FRnewFCS[,-channels_to_clean], 
-                         Segment = 1000, 
-                         MaxPercCut = 0.5,
-                         FileID = gsub("_normalised", "", file),
-                         Plot = "All",
-                         Directory = file.path(clean_dir, sub_dir),
-                         UseOnlyWorstChannels = TRUE,
-                         AllowFlaggedRerun = TRUE)
-  
-  #subdir <- gsub("_normalised", "", file)
-  # selection <- norm_not_na
-  selection <- cleaned_data$goodCellIDs
-  if(length(flowCut_res$ind) > 0) {
-    selection <- selection[-flowCut_res$ind]
-  }
-  
-  # Write out selected subset of untransformed data
-  write.FCS(ff[selection, ],
-            file = file.path(clean_dir,sub_dir, gsub("_normalised", "", file))) 
+  # clean Signal 
+  ff <- clean_signal(flow_frame = ff, to_plot = "All", out_dir = clean_dir)
+ 
+  # Write FCS files
+  write.FCS(ff,
+            file = file.path(clean_dir, gsub("_beadNorm","_cleaned", file))) 
   
 }
 
