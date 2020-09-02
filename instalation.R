@@ -1,11 +1,13 @@
-if (!requireNamespace("BiocManager", quietly = TRUE))
-  install.packages("BiocManager")
 
+if (!requireNamespace("BiocManager", quietly = TRUE)){
+  BiocManager::install(version="3.11")
+}
+  
 if(!require("CATALYST")){
   BiocManager::install("CATALYST")
   library(CATALYST)
 }
-#
+
 if(!require("flowDensity")){
   BiocManager::install("flowDensity")
   library(flowDensity)
@@ -13,13 +15,16 @@ if(!require("flowDensity")){
 
 library(flowCore)
 library(FlowSOM)
+
+# BiocManager::install("SingleCellExperiment")
 library(SingleCellExperiment)
+
 library(ggplot2)
 
 
 if(!require("remotes")){
   install.packages("remotes")
-  # library(remotes)
+  library(remotes)
 }
 
 if(!require("CytoNorm")){
@@ -32,9 +37,12 @@ if(!require("flowAI")){
   library(flowAI)
 }
 
-BiocManager::install(version='devel')
+# if(!require("devel")){
+#   BiocManager::install("devel")
+# }
 
 if(!require("flowCut")){
   BiocManager::install("flowCut")
   library(flowCut)
 }
+

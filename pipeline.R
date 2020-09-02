@@ -32,58 +32,28 @@ if(!dir.exists(bead_norm_dir)) dir.create(bead_norm_dir)
 # set files input directory
 raw_data_dir <- file.path(dir, "RawFiles")
 
-# define sample to which all the files should be normalized and read in flowframe
-ff_ref <- read.FCS(file.path(raw_data_dir, "181129_RUN1_01.FCS"))
+# define full pathway to files thatwill be normalized
+files <- list.files(file.path(raw_data_dir), pattern = ".FCS$", full.names = T)
 
-# define which files will be normalized
-files <- list.files(file.path(raw_data_dir), pattern = ".FCS$")
+# create reference sample to which all the files will be normalized 
+ref_sample <- create_ref(fcs_file = files[1], beads = "dvs")
 
 for (file in files){
-  print(paste0("   ", Sys.time()))
-  print(paste0("   Normalizing ", file))
   
-  # read flow frame
-  ff <- read.FCS(file.path(raw_data_dir, file))
+  # read fcs file
+  ff <- read.FCS(file, transformation = FALSE, truncate_max_range = FALSE)
   
-  ff <- bead_normalize()
+  # bead normalize the files
+  ff_norm <- bead_normalize(flow_frame = ff, keep_all_markers = FALSE, 
+                            out_dir = bead_norm_dir, norm_to_ref = ref_sample, 
+                            to_plot = TRUE)
   
-  
-  
-  
-  
-  
-  
-  
-  # at this point for further analysis you can select only the markers
-  # necessary for the analysis, this will reduce the size of your data
-  channels_to_keep <- c(grep("Time|Event_length|Pd|Ir|Ce140|Center|Offset|Width|Residual",
-                             colnames(ff)),
-                        grep("_", get_markers(ff, colnames(ff))))
-  channels_to_keep <- colnames(ff)[sort(unique(channels_to_keep))]
-  
-  # prepare the data for bead normalization 
-  dat <- prepData(ff[, channels_to_keep])
-  
-  # normalize the data and remove beads
-  dat_norm <- normCytof(x = dat,
-                        beads = "dvs",
-                        remove_beads = TRUE,
-                        norm_to = ff_ref,
-                        k = 80,
-                        plot = TRUE)
-  
-  # convert back to .fcs files and save 
-  ff <- sce2fcs(dat_norm$data)
-  write.FCS(ff, file.path(bead_norm_dir, sub_dir, gsub(".FCS","_beadNorm.fcs", file)))
-  
-  # plot and save diagnostic plots 
-  dat_norm$scatter
-  ggsave(filename = file.path(bead_norm_dir, sub_dir, gsub(".FCS","_beadGate.png", file)))
-  dat_norm$lines
-  ggsave(filename = file.path(bead_norm_dir, sub_dir, gsub(".FCS","_beadLines.png", file)))
+  # write FCS files
+  write.FCS(ff_norm, filename = file.path(bead_norm_dir, 
+                                 gsub(".FCS","_beadNorm.fcs", basename(file)))) 
+
 }
-
-
+  
 # ------------------------------------------------------------------------------
 # Signal Cleaning --------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -99,27 +69,27 @@ if(!dir.exists(clean_dir)) dir.create(clean_dir)
 bead_norm_dir <- file.path(dir, "BeadNorm")
 
 # Define which files will be normalized
-files <- list.files(file.path(bead_norm_dir), pattern = "_beadNorm.fcs$")
+files <- list.files(file.path(bead_norm_dir), pattern = "_beadNorm.fcs$", 
+                    full.names = TRUE)
 
 for (file in files) {
   
   # read fcs file
-  ff <- read.FCS(file.path(bead_norm_dir, file), transformation = FALSE)
+  ff <- read.FCS(filename = file, transformation = FALSE)
   
   # norm_not_na <- which(apply(ff_t@exprs, 1, function(x){all(!is.na(x))}))
   # ff_t <- ff_t[norm_not_na, ]
   
   # clean Flow Rate and signal instability
-  ff <- clean_flow_rate(flow_frame = ff, out_dir = clean_dir, 
-                                to_plot = TRUE)
+  ff <- clean_flow_rate(flow_frame = ff, out_dir = clean_dir, to_plot = TRUE)
   
   # clean Signal 
-  ff <- clean_signal(flow_frame = ff, to_plot = "All", out_dir = clean_dir)
+  ff <- clean_signal(flow_frame = ff, to_plot = "All", out_dir = clean_dir, 
+                     arcsine_transform = TRUE)
  
   # Write FCS files
   write.FCS(ff,
-            file = file.path(clean_dir, gsub("_beadNorm","_cleaned", file))) 
-  
+            file = file.path(clean_dir, gsub("_beadNorm","_cleaned", basename(file)))) 
 }
 
 
