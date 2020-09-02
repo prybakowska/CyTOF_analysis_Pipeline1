@@ -38,6 +38,7 @@ files <- list.files(file.path(raw_data_dir), pattern = ".FCS$", full.names = T)
 # create reference sample to which all the files will be normalized 
 ref_sample <- create_ref(fcs_file = files[1], beads = "dvs")
 
+# Normalize file by file in the loop, saving new file with each loop
 for (file in files){
   
   # read fcs file
@@ -72,6 +73,7 @@ bead_norm_dir <- file.path(dir, "BeadNorm")
 files <- list.files(file.path(bead_norm_dir), pattern = "_beadNorm.fcs$", 
                     full.names = TRUE)
 
+# Clean file by file in the loop, saving new file with each loop
 for (file in files) {
   
   # read fcs file
