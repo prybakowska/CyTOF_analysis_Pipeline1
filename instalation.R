@@ -46,3 +46,35 @@ if(!require("flowCut")){
   library(flowCut)
 }
 
+if(!require("stringr")){
+  install.packages("stringr")
+  library(stringr)
+}
+
+if(!require("devtools")){
+  install.packages("devtools")
+  library(devtools)
+}
+
+if(!require("cytutils")){
+  install_github("ismmshimc/cytutils")
+  library(cytutils)
+}
+
+if(!require("pheatmap")){
+  install.packages(pheatmap)
+  library(pheatmap)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
