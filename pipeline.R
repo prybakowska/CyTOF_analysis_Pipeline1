@@ -104,8 +104,8 @@ files <- list.files(file.path(clean_dir), pattern = "_cleaned.fcs$",
                     full.names = TRUE)
 
 # Define batch id and sample id for each file
-file_batch_id <- stringr::str_match(basename(files), "(RUN[0-9]*)_[0-9]*_.*.fcs")[,2]
-file_id <- stringr::str_match(basename(files), "RUN[0-9]*_([0-9]*)_.*.fcs")[,2]
+file_batch_id <- str_match(basename(files), "(RUN[0-9]*)_[0-9]*_.*.fcs")[,2]
+file_id <- str_match(basename(files), "RUN[0-9]*_([0-9]*)_.*.fcs")[,2]
 
 plot_marker_quantiles(fcs_files = files, file_batch_id = file_batch_id, 
                       file_id = file_id, arcsine_transform = TRUE, 
@@ -124,78 +124,59 @@ files <- list.files(file.path(clean_dir), pattern = "_cleaned.fcs$",
                     full.names = TRUE)
 
 # Define batch_id for each file 
-file_batch_id <- stringr::str_match(basename(files), "(RUN[0-9]*)_[0-9]*_.*.fcs")[,2]
+file_batch_id <- stringr::str_match(basename(files), 
+                                    "(RUN[0-9]*)_[0-9]*_.*.fcs")[,2]
 
 # Define out_dir for diagnostic plots
 quality_dir <- file.path(dir, "Quality_control")
 
-file_quality_check <- function(fcs_files = files, file_batch_id = file_batch_id, 
-                               out_dir = quality_dir,
-                               phenotyping_markers = c("CD", "HLA", "IgD")){
-  
-  if(!dir.exists(out_dir)) dir.create(out_dir)
-  
-  scores <- list()
-  
-  for (batch in unique(file_batch_id)){
-    
-    files <- fcs_files[file_batch_id == batch]
-    
-    fsom <- fsom_aof(fcs_files = files, phenotyping_markers = phenotyping_markers, 
-                     out_dir = out_dir)
-    
-    scores[[batch]] <- aof_scoring(fcs_files = files, phenotyping_channels = phenotyping_channels, 
-                                   fsom = fsom, out_dir = out_dir)
-    
+file_quality_check(fcs_files = files, file_batch_id = file_batch_id, 
+                   out_dir = quality_dir,
+                   phenotyping_markers = c("Ir","CD", "HLA", "IgD", "Pt"), 
+                   arcsine_transform = TRUE)
+
+
+# ------------------------------------------------------------------------------
+# Files outliers detection -----------------------------------------------------
+#-------------------------------------------------------------------------------
+
+# Set input directory 
+clean_dir <- file.path(dir, "Cleaned")
+
+# Define files for debarcoding
+files <- list.files(file.path(clean_dir), pattern = "_cleaned.fcs$", 
+                    full.names = TRUE)
+
+# Define out_dir for diagnostic plots
+debarcode_dir <- file.path(dir, "Debarcoded")
+
+bad_quality_file <- list.files(dir, recursive = TRUE, 
+                               pattern = "AOF_sample_scores.RDS")
+
+debarcode_files <- function(fcs_files = files, bad_quality_files = NULL, 
+                            out_dir = debarcode_dir){
+   
+  if(!is.null(bad_quality_files)){
+    file_scores <- readRDS(bad_quality_file)
   }
   
-  plot_aof_all_files <- function(scores = scores, 
-                                 out_dir, sd = 3){
- 
-    df_scores <- do.call(rbind, scores)
-    df_scores$file_names <- basename(rownames(df_scores))
+  for (file in fcs_files){
+    print(paste0("   ", Sys.time()))
+    print(paste0("   Debarcoding ", file))
+    ff <- read.FCS(file)
     
-    scores_median <- median(df_scores$sample_scores)
-    scores_MAD <- mad(df_scores$sample_scores)
+    file_label <- basename(file)
+    if(!dir.exists(out_dir)) dir.create(out_dir)
     
-    df_scores$quality <- ifelse(df_scores$sample_scores > 
-                                  (scores_median + sd * scores_MAD),"bad","good")
     
-    bad_scores <- sum(df_scores$quality == "bad")
     
-    colors <- c("bad" = "red", "good" = "black")     
-    
-    p <- ggplot(df_scores, aes(x = file_names, y = sample_scores, color = quality)) +
-      geom_point() +
-      scale_colour_manual(values = colors) +
-      ylim(-0.5, 140) + 
-      geom_hline(yintercept = scores_median + sd * scores_MAD, linetype = "dashed", color = "green")+
-      geom_text(aes(x= 0, y= scores_median + sd * scores_MAD, 
-                    label = paste("th= ", round(scores_median + sd * scores_MAD, digits = 2)), 
-                    vjust = -2, hjust = -1)) + 
-      annotate(geom="text", x = mean(as.numeric(as.factor(df_scores$file_names))), y=120, label=paste("N bad = ", bad_scores),
-               color="red") +
-      theme_bw() + 
-      theme(axis.text.x = element_text(angle = 90, hjust = 1),
-            panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-            # panel.border = fill = "black",
-            axis.line = element_line(colour = "black"),
-            legend.position = "bottom") +
-      scale_x_discrete(breaks = df_scores$file_names[df_scores$quality == "bad"])
-    p
-    
-    ggsave(filename = "AOF_scores.pdf", plot = p, path = file.path(output_dir))
-    
-    # bad_files <- sample_scores[which(sample_scores$vector == "red"),]
-    
-    saveRDS(df_scores, file.path(output_dir, "AOF_sample_scores.RDS"))
-    write.csv(df_scores, file = file.path(output_dir, "AOF_excluded_files.csv"))
+    debarcode(ff = ff, 
+              sample_key = CATALYST::sample_key,
+              output_dir = debarcode_tmp_dir,
+              ref = NULL,
+              min_threshold = 0.18)
   }
-  
 }
-
-
-
 
 
 

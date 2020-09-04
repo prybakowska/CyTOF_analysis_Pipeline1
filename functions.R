@@ -23,7 +23,7 @@ find_mass_ch <- function(flow_frame,
 #' @param flow_frame Flow frame.
 #' @param to_plot Logical if to plot cleaning results.
 #' @param out_dir Character, pathway to where the plots should be saved, 
-#' only if to_plot = TRUE.
+#' only if argument to_plot = TRUE, default is set to working directory.
 #' @return Cleand, untransformed flow frame
 
 clean_flow_rate <- function(flow_frame, to_plot = TRUE, 
@@ -71,7 +71,7 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
 #' "Flagged Only", plots the channels that were spotted with flowcut as incorrect
 #' and "None", does not plots anything.
 #' @param out_dir Character, pathway to where the plots should be saved, 
-#' only if argument to_plot = TRUE
+#' only if argument to_plot = TRUE, default is set to working directory.
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5.
 #' @param ... Additional arguments to pass to flowcut.
@@ -173,8 +173,8 @@ create_ref <- function(fcs_file, beads = NULL){
 #' full marker name e.g. "CD45" or "CD" if all CD-markers needs to be plotted
 #' @param to_plot Logical if to plot bead gate and bead normalization for each 
 #' file.
-#' @param out_dir Pathway to where the plots should be saved, 
-#' only if to_plot = TRUE, the default is working directory.
+#' @param out_dir Character, pathway to where the plots should be saved, 
+#' only if argument to_plot = TRUE, default is set to working directory.
 #' @return Bead normalized flow frame without the beads.
 
 bead_normalize <- function(flow_frame, keep_all_markers = TRUE, 
@@ -357,7 +357,8 @@ fsom_aof <- function(fcs_files,
                      ydim = 10,
                      nClus = 10,
                      out_dir, 
-                     pattern = NULL, ...){
+                     pattern = NULL,
+                     arcsine_transform, ...){
   
   
   if(check(phenotyping_channels) == 0){
@@ -367,13 +368,18 @@ fsom_aof <- function(fcs_files,
                                        collapse = ("|")), markers, value = TRUE)
   }
   
+  if(arcsine_transform  == TRUE){
+    trans <- transformList(names(phenotyping_channels), cytofTransform)
+  } else {
+    trans <- NULL
+  }
+  
   fsom <- prepareFlowSOM(file = fcs_files,
                          colsToUse = names(phenotyping_channels),
                          seed = 1, 
                          plot = FALSE,
                          nCells = nCells,
-                         transformList = transformList(names(phenotyping_channels), 
-                                                       cytofTransform),
+                         transformList = trans,
                          FlowSOM.params = list(xdim = xdim, 
                                                ydim = ydim, 
                                                nClus = nClus, 
@@ -394,11 +400,19 @@ fsom_aof <- function(fcs_files,
   
 }
 
-aof_scoring <- function(fcs_files = files,
-                        phenotyping_channels,
+aof_scoring <- function(fcs_files,
+                        phenotyping_markers,
                         fsom,
                         out_dir,
                         list_for_scores = NULL){
+  
+  if(check(phenotyping_channels) == 0){
+    
+    o <- capture.output(ff_tmp <- read.FCS(file.path(files[1])))
+    markers <- get_markers(ff_tmp, colnames(ff_tmp))
+    phenotyping_channels <- grep(paste(phenotyping_markers, 
+                                       collapse = ("|")), markers, value = TRUE)
+  }
   
   aof_scores <- matrix(NA,
                        nrow = length(fcs_files), 
@@ -417,7 +431,7 @@ aof_scoring <- function(fcs_files = files,
                                   y = MC, 
                                   channel_names = names(phenotyping_channels),
                                   width = 0.05, 
-                                  cofactor = NULL, 
+                                  cofactor = 5, 
                                   verbose = TRUE) 
     aof_scores[file, ] <- aof_tmp$Aof
   }
@@ -464,9 +478,97 @@ aof_scoring <- function(fcs_files = files,
   
 }
 
+#' @param out_dir Character, pathway to where the plots should be saved, 
+#' only if argument to_plot = TRUE, default is set to working directory
+
+plot_aof_all_files <- function(scores, out_dir, sd) {
+  
+  df_scores <- do.call(rbind, scores)
+  df_scores$file_names <- basename(rownames(df_scores))
+  
+  scores_median <- median(df_scores$sample_scores)
+  scores_MAD <- mad(df_scores$sample_scores)
+  
+  df_scores$quality <- ifelse(df_scores$sample_scores > 
+                                (scores_median + sd * scores_MAD),"bad","good")
+  
+  bad_scores <- sum(df_scores$quality == "bad")
+  
+  colors <- c("bad" = "red", "good" = "darkblue", "threshold= " = "orange")  
+  
+  max_score <- max(df_scores$sample_scores)
+  max_pctgs <- max_score + (max_score * 0.1)
+  
+  p <- ggplot(df_scores, aes(x = file_names, y = sample_scores, color = quality)) +
+    geom_point(size = 4) +
+    scale_colour_manual(values = colors) +
+    ylim(-0.5, max_pctgs) + 
+    geom_hline(yintercept = scores_median + sd * scores_MAD, 
+               linetype = "dashed", color = "darkgreen", size = 1)+
+    # geom_text(aes(x= 0, y= scores_median + sd * scores_MAD, label = 
+    #                 paste("threshold= ", round(scores_median + sd * scores_MAD, digits = 2)), 
+    #               vjust = -1, hjust = -0.2), color = "darkgreen", size = 6) + 
+    annotate(geom="text", x = mean(as.numeric(as.factor(df_scores$file_names))), 
+             y= max_score - 0.05*max_score, label=paste("N bad = ", bad_scores),
+             color="red", size = 5) +
+    theme_bw() + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+          axis.text = element_text(size = 11),
+          panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          # panel.border = fill = "black",
+          axis.line = element_line(colour = "black"),
+          legend.position = "none") +
+    scale_x_discrete(breaks = df_scores$file_names[df_scores$quality == "bad"])
+  p
+  
+  ggsave(filename = "AOF_scores.pdf", plot = p, path = file.path(out_dir))
+  
+  # bad_files <- sample_scores[which(sample_scores$vector == "red"),]
+  
+  saveRDS(df_scores, file.path(out_dir, "AOF_sample_scores.RDS"))
+  write.csv(df_scores, file = file.path(out_dir, "AOF_excluded_files.csv"))
+  
+  return(df_scores)
+}
 
 
+#' @description performs sample quality score 
+#' @param fcs_files Character, full path to fcs_files.
+#' @param file_batch_id Character vector, batch label for each fcs_file, 
+#'the order needs to be the same as in fcs_files.
+#' @param out_dir Character, pathway to where the plots should be saved, 
+#' only if argument to_plot = TRUE, default is set to working directory
+#' @param phenotyping_markers Character vector, marker names to be used for 
+#' flowsom clustering inlcuding DNA marker Iridium and viability staining if avaiable,
+#' can be full marker name e.g. "CD45" or pattern "CD" if 
+#' all CD-markers needs to be plotted, default is set to NULL, so all the mass 
+#' channels will be used 
+#' @param arcsine_transform Logical, if the data should be transformed with 
+#' arcsine transformation and cofactor 5.
+#' @param sd numeric
 
+file_quality_check <- function(fcs_files, file_batch_id, 
+                               out_dir, phenotyping_markers = NULL, 
+                               arcsine_transform = TRUE, sd = 3){
+  
+  if(!dir.exists(out_dir)) dir.create(out_dir)
+  
+  scores <- list()
+  
+  for (batch in unique(file_batch_id)){
+    
+    files <- fcs_files[file_batch_id == batch]
+    
+    fsom <- fsom_aof(fcs_files = files, phenotyping_markers = phenotyping_markers, 
+                     out_dir = out_dir, arcsine_transform = arcsine_transform)
+    
+    scores[[batch]] <- aof_scoring(fcs_files = files, phenotyping_markers = phenotyping_markers, 
+                                   fsom = fsom, out_dir = out_dir)
+    
+    final_score <- plot_aof_all_files(scores = scores, out_dir = out_dir, 
+                                      sd = sd)
+  }
+}
 
 
 
