@@ -4,7 +4,6 @@ source('~/Documents/CyTOF_workflow/CytofPipeline1/functions.R')
 
 
 # set working directory
-
 dir <- "/home/paulina/Documents/CyTOF_workflow/data"
 setwd(dir)
 
@@ -137,7 +136,7 @@ file_quality_check(fcs_files = files, file_batch_id = file_batch_id,
 
 
 # ------------------------------------------------------------------------------
-# Files outliers detection -----------------------------------------------------
+# Files debarcoding ------------------------------------------------------------
 #-------------------------------------------------------------------------------
 
 # Set input directory 
@@ -150,50 +149,147 @@ files <- list.files(file.path(clean_dir), pattern = "_cleaned.fcs$",
 # Define out_dir for diagnostic plots
 debarcode_dir <- file.path(dir, "Debarcoded")
 
-bad_quality_file <- list.files(dir, recursive = TRUE, 
-                               pattern = "AOF_sample_scores.RDS")
+file_scores <- readRDS(list.files(dir, recursive = TRUE, 
+                               pattern = "AOF_sample_scores.RDS"))
 
-debarcode_files <- function(fcs_files = files, bad_quality_files = NULL, 
-                            out_dir = debarcode_dir){
-   
-  if(!is.null(bad_quality_files)){
-    file_scores <- readRDS(bad_quality_file)
-  }
+good_files <- file_scores$file_names[file_scores$quality == "good"]
+fcs_files_clean <- files[basename(files) %in% good_files]
+
+file_batch_id <- stringr::str_match(basename(fcs_files_clean), 
+                                    "(RUN[0-9]*)_[0-9]*_.*.fcs")[,2]
+
+barcodes_list <- list("RUN1" = rownames(sample_key)[c(1:16)], 
+                      "RUN2" = rownames(sample_key)[c(5:20)])
+
+debarcode_files(fcs_files = fcs_files_clean, 
+                out_dir = debarcode_dir, min_threshold = TRUE, 
+                barcodes_used = barcodes_list, file_batch_id = file_batch_id)
+
+
+#TODO check bad quality files
+# ------------------------------------------------------------------------------
+# Files aggregation ------------------------------------------------------------
+#-------------------------------------------------------------------------------
+
+# Set input directory 
+debarcode_dir <- file.path(dir, "Debarcoded")
+
+# Define files for debarcoding
+files <- list.files(file.path(debarcode_dir), pattern = "_debarcoded.fcs$", 
+                    full.names = TRUE, recursive = T)
+
+# Define out_dir for aggtegated files
+aggregate_dir <- file.path(dir, "Aggregated")
+if(!dir.exists(aggregate_dir))(dir.create(aggregate_dir))
+
+# Bring meta data 
+md <- read.csv(file.path(dir, "meta_data.csv"))
+
+# assign barcodes names the to barcodes 
+md$barcode_name <- paste0(rownames(sample_key)[md$BARCODE])
+
+# assign new sample names specifying patient id and its batch name 
+md$fcs_new_name <- paste0(md$PATIENT_ID, "_", md$RUN, ".fcs")  
+
+# aggregate files batch by batch 
+for (i in seq_len(nrow(md))){
   
-  for (file in fcs_files){
-    print(paste0("   ", Sys.time()))
-    print(paste0("   Debarcoding ", file))
-    ff <- read.FCS(file)
-    
-    file_label <- basename(file)
-    if(!dir.exists(out_dir)) dir.create(out_dir)
-    
-    
-    
-    debarcode(ff = ff, 
-              sample_key = CATALYST::sample_key,
-              output_dir = debarcode_tmp_dir,
-              ref = NULL,
-              min_threshold = 0.18)
-  }
+  patterns <- as.character(md[i, c("barcode_name", "RUN")])
+  
+  files_to_agg <- grep(pattern = patterns[2],
+                       grep(pattern = patterns[1], files, value = TRUE), 
+                       value = TRUE)
+  
+  print(paste0("Creating ", md[[i, "fcs_new_name"]]))
+  
+  aggregate_files(fcs_files = files_to_agg,
+                  outputFile = file.path(aggregate_dir, md[[i, "fcs_new_name"]]))
 }
 
 
+# ------------------------------------------------------------------------------
+# Files gating -----------------------------------------------------------------
+#-------------------------------------------------------------------------------
+
+# open cytofcelan GUI and select the file sthat you want to gate, 
+# de-select bead removal 
+
+cytofclean::cytofclean_GUI()
+
+# Set input directory 
+cytof_clean_dir <- file.path(dir, "Aggregated", "CyTOFClean")
+
+# Set output directory 
+gate_dir <- file.path(dir, "Gated")
+
+if (!dir.exists(gate_dir)) { 
+  dir.create(gate_dir)
+}
+
+files <- list.files(cytof_clean_dir, pattern = ".fcs$")
+gate(fcs_files = files, cd45_ch = "Pr141Di", viability_ch = "Pt195Di",
+     out_dir = gate_dir)
 
 
+# ------------------------------------------------------------------------------
+# Normalization using reference sample -----------------------------------------
+#-------------------------------------------------------------------------------
+
+# Set input directory 
+gate_dir <- file.path(dir, "Gated")
+
+# Define files for debarcoding
+files_ref <- list.files(file.path(gate_dir), pattern = "REF.*_gated.fcs$", 
+                    full.names = TRUE, recursive = T)
+
+#
+labels_ref <- stringr::str_match(basename(files_ref), 
+                                   ".*_(RUN[0-9]*).*.fcs")[,2]
+
+ff <- read.FCS(files[1])
+channels <- grep("Pd|Rh", grep("Di", colnames(ff), value = T), 
+                 value = T, invert = T) #TODO channels should not have pd 
+
+# Define out_dir for aggtegated files
+norm_dir <- file.path(dir, "CytoNormed")
+if(!dir.exists(norm_dir))(dir.create(norm_dir))
+
+png(file.path(norm_dir, "001_099_normalization.png"),
+    width = length(channels) * 300,
+    height = (length(files_ref) * 2 + 1) * 300)
+model <- QuantileNorm.train(files = files_ref,  labels = labels_ref, 
+                            channels = channels, 
+                            transformList = transformList(channels, 
+                                                          cytofTransform), 
+                            nQ = 2, quantileValues = c(0.01, 0.99), goal = "mean", 
+                            plot = TRUE)
+dev.off()
+
+saveRDS(object = model, file = file.path(norm_dir, "001_099_model.RDS"))
 
 
+files <- list.files(file.path(gate_dir), pattern = "_gated.fcs$", 
+                        full.names = TRUE, recursive = T)
 
+labels <- stringr::str_match(basename(files), 
+                             ".*_(RUN[0-9]*).*.fcs")[,2]
 
+QuantileNorm.normalize(model = model, files = files, labels = labels, 
+                       transformList = transformList(channels, 
+                                                     cytofTransform),
+                       transformList.reverse = transformList(channels, 
+                                                             cytofTransform.reverse), 
+                       outputDir = norm_dir)
 
+# show how to see the batch effect 
 
+files_before_norm <- list.files(gate_dir, pattern = ".fcs", full.names = T)
+files_after_norm <- list.files(norm_dir, pattern = ".fcs", full.names = T)
 
+plot_batch(files_before_norm = files_before_norm, files_after_norm = files_after_norm,
+           out_dir = norm_dir, batch_pattern = "RUN[0-9]*" )
 
-
-
-
-
-
+# TODO add option for plotting cytokines!!!!
 
 
 

@@ -66,8 +66,16 @@ if(!require("pheatmap")){
   library(pheatmap)
 }
 
+if(!require(cytofclean)){
+  devtools::install_github("JimboMahoney/cytofclean", 
+                           dependencies = TRUE)
+  library("cytofclean")
+}
 
-
+if(!require("uwot")){
+  install.packages("uwot")
+  library(uwot)
+}
 
 
 
