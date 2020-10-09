@@ -3,6 +3,11 @@ if (!requireNamespace("BiocManager", quietly = TRUE)){
   BiocManager::install(version="3.11")
 }
   
+if(!require("FlowRepositoryR")){
+  BiocManager::install("FlowRepositoryR")
+  library(FlowRepositoryR)
+}
+
 if(!require("CATALYST")){
   BiocManager::install("CATALYST")
   library(CATALYST)
@@ -13,14 +18,25 @@ if(!require("flowDensity")){
   library(flowDensity)
 }
 
-library(flowCore)
-library(FlowSOM)
+if(!require("flowCore")){
+  BiocManager::install("flowCore")
+  library(flowCore)
+}
 
-# BiocManager::install("SingleCellExperiment")
-library(SingleCellExperiment)
+if(!require("FlowSOM")){
+  BiocManager::install("FlowSOM")
+  library(FlowSOM)
+}
 
-library(ggplot2)
+if(!require("SingleCellExperiment")){
+  BiocManager::install("SingleCellExperiment")
+  library(SingleCellExperiment)
+}
 
+if(!require("FlowSOM")){
+  install.packages("ggplot2")
+  library(ggplot2)
+}
 
 if(!require("remotes")){
   install.packages("remotes")
@@ -77,8 +93,15 @@ if(!require("uwot")){
   library(uwot)
 }
 
+if(!require("tidyverse")){
+  install.packages("tidyverse")
+  library(tidyverse)
+}
 
-
+if (!require("RColorBrewer")) {
+  install.packages("RColorBrewer")
+  library(RColorBrewer)
+}
 
 
 
