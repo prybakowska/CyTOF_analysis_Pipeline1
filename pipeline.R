@@ -262,22 +262,23 @@ gate(fcs_files = files, viability_ch = "Pt195Di",
 # Set input directory 
 gate_dir <- file.path(dir, "Gated")
 
-# Define files for debarcoding
+# Define reference samples
 files_ref <- list.files(file.path(gate_dir), pattern = "p1_REF.*_gated.fcs$", 
                     full.names = TRUE, recursive = T)
 
-#
+# Define batch labels for each files
 labels_ref <- stringr::str_match(basename(files_ref), 
                                    ".*_(day[0-9]*).*.fcs")[,2]
-
+# Define markers to be normalized
 ff <- read.FCS(files_ref[1])
 channels <- grep("Pd|Rh|140", grep("Di", colnames(ff), value = T), 
                  value = T, invert = T) #TODO channels should not have pd 
 
-# Define out_dir for aggregated files
+# Define out_dir for normalized files
 norm_dir <- file.path(dir, "CytoNormed")
 if(!dir.exists(norm_dir))(dir.create(norm_dir))
 
+# Build the normalization model using reference samples and plot quantiles 
 png(file.path(norm_dir, "005_095_normalization.png"),
     width = length(channels) * 300,
     height = (length(files_ref) * 2 + 1) * 300)
@@ -289,15 +290,19 @@ model <- QuantileNorm.train(files = files_ref,  labels = labels_ref,
                             plot = TRUE)
 dev.off()
 
+# save the model
 saveRDS(object = model, file = file.path(norm_dir, "005_095_model.RDS"))
 
-
+# read fies that will be normalized
 files <- list.files(file.path(gate_dir), pattern = "_gated.fcs$", 
                         full.names = TRUE, recursive = T)
 
+# Define batch labels for each files, note that they need to corresponds to 
+# reference labels 
 labels <- stringr::str_match(basename(files), 
                              ".*_(day[0-9]*).*.fcs")[,2]
 
+# Normalize files 
 QuantileNorm.normalize(model = model, files = files, labels = labels, 
                        transformList = transformList(channels, 
                                                      cytofTransform),
@@ -305,17 +310,25 @@ QuantileNorm.normalize(model = model, files = files, labels = labels,
                                                              cytofTransform.reverse), 
                        outputDir = norm_dir)
 
-# show how to see the batch effect 
+
+# ------------------------------------------------------------------------------
+# Plot batch effect ------------------------------------------------------------
+#-------------------------------------------------------------------------------
+
+# Define batch pattern
 batch_pattern <- "day[0-9]*"
 
+# Define files before normalization and order them accoring to the batch 
 files_before_norm <- list.files(gate_dir, pattern = ".fcs", full.names = T)
 batch <- str_match(files_before_norm, "day[0-9]*")[,1]
 files_before_norm <- files_before_norm[order(factor(batch))]
 
+# Define files after normalization and order them accoring to the batch 
 files_after_norm <- list.files(norm_dir, pattern = ".fcs", full.names = T)
 batch <- str_match(files_after_norm, "day[0-9]*")[,1]
 files_after_norm <- files_after_norm[order(factor(batch))]
 
+# Plot batch effect 
 plot_batch(files_before_norm = files_before_norm, 
            files_after_norm = files_after_norm,
            out_dir = norm_dir, batch_pattern = batch_pattern, 
