@@ -293,7 +293,7 @@ dev.off()
 # save the model
 saveRDS(object = model, file = file.path(norm_dir, "005_095_model.RDS"))
 
-# read fies that will be normalized
+# Define path to the files for normalization
 files <- list.files(file.path(gate_dir), pattern = "_gated.fcs$", 
                         full.names = TRUE, recursive = T)
 
