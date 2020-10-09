@@ -165,7 +165,7 @@ debarcode_dir <- file.path(dir, "Debarcoded")
 file_scores <- readRDS(list.files(dir, recursive = TRUE, 
                                pattern = "AOF_sample_scores.RDS"))
 
-# Select good files
+# Select good quality files
 good_files <- file_scores$file_names[file_scores$quality == "good"]
 fcs_files_clean <- files[basename(files) %in% good_files]
 
@@ -173,6 +173,7 @@ fcs_files_clean <- files[basename(files) %in% good_files]
 file_batch_id <- stringr::str_match(basename(fcs_files_clean), 
                                     "(day[0-9]*)_[0-9]*_.*.fcs")[,2]
 
+#TODO check if you can use meta data to read barcodes instead of doing this 
 # Define which barcodes were used in each batch 
 barcodes_list <- list("day1" = rownames(sample_key)[c(2:6, 8:13, 15)], 
                       "day2" = rownames(sample_key)[c(6:17)],
@@ -183,6 +184,7 @@ debarcode_files(fcs_files = fcs_files_clean,
                 out_dir = debarcode_dir, min_threshold = TRUE, 
                 barcodes_used = barcodes_list, file_batch_id = file_batch_id)
 #TODO plot less cells in the barcoding file  
+#TODO user defined threshold and make infromatrion about flagging 
 
 # TODO check bad quality files and maybe put heatmap scores 
 # ------------------------------------------------------------------------------
@@ -196,11 +198,11 @@ debarcode_dir <- file.path(dir, "Debarcoded")
 files <- list.files(file.path(debarcode_dir), pattern = "_debarcoded.fcs$", 
                     full.names = TRUE, recursive = T)
 
-# Define out_dir for aggtegated files
+# Define out_dir for aggregated files
 aggregate_dir <- file.path(dir, "Aggregated")
 if(!dir.exists(aggregate_dir))(dir.create(aggregate_dir))
 
-# Bring meta data 
+# Bring metadata 
 md <- read.csv(file.path(dir, "meta_data.csv"))
 
 # assign barcodes names the to barcodes 
@@ -209,6 +211,7 @@ md$barcode_name <- paste0(rownames(sample_key)[md$BARCODE])
 # assign new sample names specifying patient id and its batch name 
 md$fcs_new_name <- paste0(md$ID, "_", md$STIM, "_", md$BATCH, ".fcs")  
 
+# TODO aggregate files put this part in teh function so it is shorter
 # aggregate files batch by batch 
 for (i in seq_len(nrow(md))){
   
@@ -232,7 +235,6 @@ for (i in seq_len(nrow(md))){
 
 # open cytofcelan GUI and select the file that you want to gate, 
 # de-select bead removal 
-
 cytofclean::cytofclean_GUI()
 
 # Set input directory 
@@ -240,13 +242,16 @@ cytof_clean_dir <- file.path(dir, "Aggregated", "CyTOFClean")
 
 # Set output directory 
 gate_dir <- file.path(dir, "Gated")
-
 if (!dir.exists(gate_dir)) { 
   dir.create(gate_dir)
 }
 
+# List files for gating 
 files <- list.files(cytof_clean_dir, pattern = ".fcs$")
-gate(fcs_files = files, cd45_ch = "Pr141Di", viability_ch = "Pt195Di",
+
+#TODO remove all the CD45 gating
+# Gate the files
+gate(fcs_files = files, viability_ch = "Pt195Di",
      out_dir = gate_dir)
 
 
