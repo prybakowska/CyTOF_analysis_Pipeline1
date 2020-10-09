@@ -16,7 +16,7 @@ ds <- flowRep.get("FR-FCM-ZZJ7") # TODOD change the number to your flowrepositor
 summary(ds)
 
 # Download the flowrepository data
-ds <- download(object = ds, dirpath = file.path(dir, "RawFiles_trail")) 
+ds <- download(object = ds, dirpath = file.path(dir, "RawFiles")) 
 
 # ------------------------------------------------------------------------------
 # Bead normalization -----------------------------------------------------------
@@ -44,9 +44,9 @@ for (file in files){
   # bead normalize the files
   ff_norm <- bead_normalize(flow_frame = ff, keep_all_markers = FALSE, 
                             out_dir = bead_norm_dir, norm_to_ref = ref_sample, 
-                            to_plot = TRUE, 
-                            markers_to_keep = c("PD","CD", "HLA", "IgD", "TCR", 
-                                                "BAFF", "Ir", "Viability","IL",
+                            to_plot = TRUE, k = 80,
+                            markers_to_keep = c("CD", "HLA", "IgD", "TCR", "Ir", 
+                                                "Viability","IL",
                                                 "TNF", "TGF", "MIP", "MCP", "Granz"))
   
   # write FCS files
@@ -113,6 +113,8 @@ for (file in files) {
   # clean Signal 
   ff <- clean_signal(flow_frame = ff, to_plot = "All", out_dir = clean_dir, 
                      arcsine_transform = TRUE)
+  
+  #TODO think which parametesr from flocut to put as user defined
  
   # Write FCS files
   write.FCS(ff,
@@ -141,6 +143,9 @@ file_quality_check(fcs_files = files, file_batch_id = file_batch_id,
                    out_dir = quality_dir,
                    phenotyping_markers = c("Ir","CD", "HLA", "IgD", "Pt"), 
                    arcsine_transform = TRUE, sd = 3)
+#TODO put the flowsom parameters in to the user selection
+#TODO make the heatmap plot with the scores
+
 
 # ------------------------------------------------------------------------------
 # Files debarcoding ------------------------------------------------------------
@@ -156,25 +161,30 @@ files <- list.files(file.path(clean_dir), pattern = "_cleaned.fcs$",
 # Define out_dir for diagnostic plots
 debarcode_dir <- file.path(dir, "Debarcoded")
 
+# Read in files scores
 file_scores <- readRDS(list.files(dir, recursive = TRUE, 
                                pattern = "AOF_sample_scores.RDS"))
 
+# Select good files
 good_files <- file_scores$file_names[file_scores$quality == "good"]
 fcs_files_clean <- files[basename(files) %in% good_files]
 
+# Define file batch ID for each file
 file_batch_id <- stringr::str_match(basename(fcs_files_clean), 
                                     "(day[0-9]*)_[0-9]*_.*.fcs")[,2]
 
+# Define which barcodes were used in each batch 
 barcodes_list <- list("day1" = rownames(sample_key)[c(2:6, 8:13, 15)], 
                       "day2" = rownames(sample_key)[c(6:17)],
                       "day3" = rownames(sample_key)[c(8:19)])
 
+# Deabarcode files 
 debarcode_files(fcs_files = fcs_files_clean, 
                 out_dir = debarcode_dir, min_threshold = TRUE, 
                 barcodes_used = barcodes_list, file_batch_id = file_batch_id)
+#TODO plot less cells in the barcoding file  
 
-
-# TODO check bad quality files
+# TODO check bad quality files and maybe put heatmap scores 
 # ------------------------------------------------------------------------------
 # Files aggregation ------------------------------------------------------------
 # ------------------------------------------------------------------------------
@@ -376,13 +386,13 @@ plot_UMAP <- function(fcs_files = files, clustering_markers = c("CD", "HLA", "Ig
     dimred_df[dimred_df[, "file_id"] == i, "batch"] <- batch
   }
   
-  p <- ggplot(dimred_df,  aes_string(x = "dim1", y = "dim2", color = "batch")) +
+  p <- ggplot(dimred_df,  aes_string(x = "dim1", y = "dim2")) +
     geom_point(aes(color = batch), size = 0.8, position="jitter") +
     theme_bw() +
     # ggtitle()+
     # scale_color_manual(values=col )+
-    # scale_color_gradientn(norm_markers[m], 
-    #                       colours = colorRampPalette(rev(brewer.pal(n = 11, name = "Spectral")))(50))+
+    scale_color_gradientn("Eu151Di", 
+                           colours = grDevices::colorRampPalette(rev(brewer.pal(n = 11, name = "Spectral")))(50))+
     theme(legend.position = "bottom")
   
   p 
