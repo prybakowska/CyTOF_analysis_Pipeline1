@@ -147,24 +147,56 @@ clean_signal <- function(flow_frame, channels_to_clean = NULL, to_plot = "All",
 #'"dvs" (for bead masses 140, 151, 153 ,165, 175) or 
 #'"beta" (for bead masses 139, 141, 159, 169, 175) or a numeric vector of masses.
 
-create_ref <- function(fcs_file, beads = NULL){
+create_ref <- function(fcs_files, beads = NULL, to_plot = TRUE, 
+                       out_dir = getw(), k = 80){
   
-  if (!file.exists(fcs_file[1])){
-    stop("incorrect file path, the fcs file does not exist")
-  }
+  # if (!file.exists(fcs_file[1])){
+  #   stop("incorrect file path, the fcs file does not exist")
+  # }
   
-  print(paste("preparing reference sample from ", 
-              basename(fcs_file)))
-  dat <- prepData(fcs_file) 
+  # print(paste("preparing reference sample from ", 
+  #             basename(fcs_file)))
+  # dat <- prepData(fcs_file) 
+  # dat_norm <- normCytof(x = dat,
+  #                       beads = beads,
+  #                       remove_beads = TRUE,
+  #                       norm_to = NULL,
+  #                       k = 80,
+  #                       plot = FALSE, 
+  #                       verbose = FALSE, 
+  #                       transform = FALSE)
+  # ff_ref <- sce2fcs(dat_norm$beads)
+  # return(ff_ref)
+  
+  ff <- AggregateFlowFrames(fileNames = fcs_files, cTotal = length(fcs_files)*25000)
+  
+  dat <- prepData(ff) 
+  
   dat_norm <- normCytof(x = dat,
                         beads = beads,
                         remove_beads = TRUE,
                         norm_to = NULL,
-                        k = 80,
-                        plot = FALSE, 
+                        k = k,
+                        plot = to_plot, 
                         verbose = FALSE, 
                         transform = FALSE)
   ff_ref <- sce2fcs(dat_norm$beads)
+  rm(ff)
+  
+  if (to_plot == TRUE){
+    
+    # plot and save diagnostic plots 
+    plot_dir <- file.path(out_dir, "Plots_BeadNormalization")
+    if(!dir.exists(plot_dir))(dir.create(plot_dir))
+    
+    p <- dat_norm$scatter
+    ggsave(filename = file.path(plot_dir,"RefBeadGate.png"), 
+           plot = p, limitsize = FALSE)
+    
+    p <- dat_norm$lines
+    ggsave(filename = file.path(plot_dir,"RefBeadLines.png"), 
+           plot = p, limitsize = FALSE)
+  }
   return(ff_ref)
 }
 
@@ -180,8 +212,7 @@ create_ref <- function(fcs_file, beads = NULL){
 #' @return Bead normalized flow frame without the beads.
 
 bead_normalize <- function(flow_frame, keep_all_markers = TRUE, 
-                           markers_to_keep = c("PD","CD", "HLA", "IgD", "TCR", 
-                                               "BAFF", "Ir", "195", "103"), 
+                           markers_to_keep = NULL, 
                            beads = "dvs", norm_to_ref = NULL, 
                            remove_beads = TRUE, to_plot = TRUE, 
                            out_dir = getwd(), ...){
@@ -237,11 +268,11 @@ bead_normalize <- function(flow_frame, keep_all_markers = TRUE,
     
     p <- dat_norm$scatter
     ggsave(filename = file.path(plot_dir, gsub(".FCS","_beadGate.png", filename)), 
-           plot = p)
+           plot = p, limitsize = FALSE)
    
     p <- dat_norm$lines
     ggsave(filename = file.path(plot_dir, gsub(".FCS","_beadLines.png", filename)), 
-           plot = p)
+           plot = p, limitsize = FALSE)
    
   }
   
@@ -261,9 +292,15 @@ bead_normalize <- function(flow_frame, keep_all_markers = TRUE,
 #' full marker name e.g. "CD45" or "CD" if all CD-markers needs to be plotted  
 
 # Plot diagnostic plot for markers across each run 
-plot_marker_quantiles <- function(fcs_files, file_batch_id, file_id,
+plot_marker_quantiles <- function(files_after_norm, files_before_norm, 
+                                  batch_pattern,
+                                  file_id = NULL, 
                                   arcsine_transform = TRUE, 
                                   markers_to_plot = NULL, out_dir = getwd()){
+  
+  
+  fcs_files <- c(files_after_norm, files_before_norm)
+  tmp <- c(paste0(files_after_norm, "_YES"), paste0(files_before_norm, "_NO"))
   
   if (!file.exists(fcs_files[1])){
     stop("incorrect file path, the fcs file does not exist")
@@ -294,14 +331,17 @@ plot_marker_quantiles <- function(fcs_files, file_batch_id, file_id,
   }
   
   quantile_values <-  c(0.05, 0.25, 0.5, 0.75, 0.95)
-  
-  files <- fcs_files
-  
-  quantiles <- expand.grid(File = files,
+  quantiles <- expand.grid(File = tmp,
                            Marker = norm_markers,
                            Quantile = quantile_values,
                            Value = NA)
-  for (file in files) {
+  quantiles <- cbind(quantiles, "Batch" = stringr::str_match(
+    basename(as.character(quantiles$File)), batch_pattern)[,1])
+  
+  quantiles$Normalization <- gsub(".*.fcs_|.*.FCS_", "", quantiles$File) 
+  quantiles$File <- gsub("_YES|_NO", "", quantiles$File)
+  
+  for (file in fcs_files) {
     print(file)
     
     o <- capture.output(ff <- read.FCS(file.path(file)))   
@@ -326,13 +366,25 @@ plot_marker_quantiles <- function(fcs_files, file_batch_id, file_id,
     }
   }
   
-  quantiles$Batch <- file_batch_id
-  quantiles$Sample <- file_id
+  # quantiles$Batch <- file_batch_id
+  quantiles$Sample <- gsub("Norm_", "", 
+                           gsub("_CC_gated.fcs|_gated.fcs|_gated.fcs|_beadNorm.fcs|.FCS",
+                                "", basename(as.character(quantiles$File))))
   
-  p <- quantiles %>%
+  ncols <- length(unique(quantiles$Batch))
+  p <- quantiles %>% filter(Normalization == "YES") %>%
     ggplot(aes(x = Sample,
                y = Value,
                color = Batch)) +
+    geom_point(data = quantiles %>% filter(Normalization == "NO"), 
+               aes(alpha = ifelse(Quantile == "0.5", 1, 0)), color = "grey48") +
+    geom_line(data = quantiles %>% filter(Normalization == "NO"), 
+              aes(alpha = ifelse(Quantile != "0.5", 1, 0),
+                  group = interaction(Batch, Quantile),
+                  size = ifelse(Quantile %in% c("0.05", "0.95"), 0.5,
+                                ifelse(Quantile == "0.5", 0, 1))),
+              alpha = 0.5, color = "grey48") +
+    
     geom_point(aes(alpha = ifelse(Quantile == "0.5", 1, 0))) +
     geom_line(aes(alpha = ifelse(Quantile != "0.5", 1, 0),
                   group = interaction(Batch, Quantile),
@@ -341,7 +393,8 @@ plot_marker_quantiles <- function(fcs_files, file_batch_id, file_id,
               alpha = 0.5) +
     scale_size_identity() +
     scale_alpha_identity() +
-    facet_wrap( ~ Marker + Batch, ncol = 2) +
+    facet_wrap(~ Marker + Batch, ncol = ncols, scales = "free_x") +
+    # facet_grid(~ Marker + Batch,  space = "free_x") +
     theme_minimal() + 
     theme(axis.text.x = element_text(angle = 90, hjust = 1),
           panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
@@ -352,10 +405,25 @@ plot_marker_quantiles <- function(fcs_files, file_batch_id, file_id,
   ggsave(filename = paste("Marker distribution across aliquots and batches.pdf"), 
          plot = p, 
          path = file.path(out_dir), 
-         width = length(files)*0.25, height = length(norm_markers)*4, limitsize = F)
+         width = length(fcs_files)*0.25, height = length(norm_markers)*4, limitsize = F)
   
 }
 
+#' @description Builds FlowSOM tree for the files scoring 
+#' @param fcs_files Character, full path to fcs_files.
+#' @param phenotyping_markers Character vector, marker names to be used for phenotyping,
+#' can be full marker name e.g. "CD45" or "CD" if all CD-markers needs to be plotted
+#' @param nCells Numeric, the total number of cells, to use for FlowSOM clustering. 
+#' This number is determined by total number of fcs files, as a defult 1000 cells 
+#' is used per file
+#' @param xdim Numeric, parameter to pass to FlowSOM, width of the SOM grid
+#' @param ydim Numeric, parameter to pass to FlowSOM, geight of the SOM grid
+#' @param nClus Numeric, exact number of clusters for metaclustering 
+#' @param out_dir Character, pathway to where the FlowSOM clustering plot should
+#'  be saved, default is set to working directory.
+#' @param pattern ?? check
+#' @param arcsine_transform Logical, if the data should be transformed with 
+#' arcsine transformation and cofactor 5.
 
 fsom_aof <- function(fcs_files, 
                      phenotyping_markers,
@@ -364,7 +432,7 @@ fsom_aof <- function(fcs_files,
                      ydim = 10,
                      nClus = 10,
                      out_dir, 
-                     pattern = NULL,
+                     # pattern = NULL,
                      arcsine_transform, ...){
   
   
@@ -694,9 +762,10 @@ debarcode_files <- function(fcs_files,
 #' @param outputFile character, the names of the file that will be given
 #' @param maxcells numeric, maximum cells to randomly aggregate from each file
 
-aggregate_files <- function (fcs_files, 
-                             channels_to_keep = NULL,
-                             outputFile = "aggregate.fcs", maxcells = NULL){
+aggregate_files <- function(fcs_files, 
+                            channels_to_keep = NULL,
+                            outputFile = "aggregate.fcs", maxcells = NULL, 
+                            write_agg_file = FALSE){
   
   nFiles <- length(fcs_files)
   flowFrame <- NULL
@@ -713,10 +782,14 @@ aggregate_files <- function (fcs_files,
     m2 <- m + stats::rnorm(length(m), 0, 0.1)
     m <- cbind(m, m2)
     colnames(m) <- c("File", "File_scattered")
+    prev_agg <- length(grep("File[0-9]*$", colnames(f)))
+    if (prev_agg > 0) {
+      colnames(m) <- paste0(colnames(m), prev_agg + 1)
+    }
     if(is.null(channels_to_keep)){
-      f <- flowCore::cbind2(f, m)
+      f <- flowCore::fr_append_cols(f, m)
     } else {
-      f <- flowCore::cbind2(f[ , channels_to_keep], m)
+      f <- flowCore::fr_append_cols(f[ , channels_to_keep], m)
     }
     if (is.null(flowFrame)) {
       flowFrame <- f
@@ -746,9 +819,11 @@ aggregate_files <- function (fcs_files,
   flowFrame@description$FIL <- gsub(".*/", "", outputFile)
   
   #write.FCS.corrected(flowFrame, filename = outputFile, endian = "big")
-  flowCore::write.FCS(flowFrame, filename = outputFile, endian = "big")
   
-  
+  if(write_agg_file == TRUE){
+     flowCore::write.FCS(flowFrame, filename = outputFile, endian = "big")
+  }
+
   return(flowFrame)
 }
 
@@ -757,7 +832,7 @@ aggregate_files <- function (fcs_files,
 gate <- function(fcs_files, cd45_ch = "Pr141Di", viability_ch = "Pt195Di",
                  out_dir = getwd()) {
   
-  n_plots <- 3  
+  n_plots <- 2  
   png(file.path(gate_dir,
                 paste0("gating.png")),
       width = n_plots * 300, height = length(files) * 300)
@@ -849,29 +924,29 @@ gate <- function(fcs_files, cd45_ch = "Pr141Di", viability_ch = "Pt195Di",
     
     points(ff_t@exprs[subset & !selection[,"life"], c(v_ch, "Ir191Di")], pch = ".") 
     
-    subset <- selection[, "life"]
-    selection[, "cd45"] <- subset
+    # subset <- selection[, "life"]
+    # selection[, "cd45"] <- subset
+    # 
+    # m <- grep(cd45_ch, colnames(ff), value = T)
+    # 
+    # tr <- deGate(ff_t[subset,], m,
+    #              tinypeak.removal = 0.1, upper = FALSE, use.upper = TRUE,
+    #              alpha = 0.05, percentile = .95, verbose = F, count.lim = 3)
+    # 
+    # if (tr < 1.7) {
+    #   tr <- 1.7
+    # }
     
-    m <- grep(cd45_ch, colnames(ff), value = T)
+    # selection[ff_t@exprs[,m] < tr[1], "cd45"] <- FALSE 
+    # percentage <- (sum(selection[,"cd45"]/sum(subset)))*100
+    # plotDens(ff_t[subset,], c("Ir191Di", m), 
+    #          main = paste0(file," ( ", format(round(percentage, 2), nsmall = 2), "% )"), 
+    #          xlim = c(0, 8), 
+    #          ylim = c(0, 8))
+    # abline(h = tr)
+    # points(ff_t@exprs[subset & !selection[,"cd45"], c("Ir191Di", m)], pch = ".")
     
-    tr <- deGate(ff_t[subset,], m,
-                 tinypeak.removal = 0.1, upper = FALSE, use.upper = TRUE,
-                 alpha = 0.05, percentile = .95, verbose = F, count.lim = 3)
-    
-    if (tr < 1.7) {
-      tr <- 1.7
-    }
-    
-    selection[ff_t@exprs[,m] < tr[1], "cd45"] <- FALSE 
-    percentage <- (sum(selection[,"cd45"]/sum(subset)))*100
-    plotDens(ff_t[subset,], c("Ir191Di", m), 
-             main = paste0(file," ( ", format(round(percentage, 2), nsmall = 2), "% )"), 
-             xlim = c(0, 8), 
-             ylim = c(0, 8))
-    abline(h = tr)
-    points(ff_t@exprs[subset & !selection[,"cd45"], c("Ir191Di", m)], pch = ".")
-    
-    write.FCS(ff[selection[,"cd45"], ],
+    write.FCS(ff[selection[,"life"], ],
               file.path(out_dir,
                         gsub(".fcs", "_gated.fcs", file)))
     
@@ -883,8 +958,7 @@ gate <- function(fcs_files, cd45_ch = "Pr141Di", viability_ch = "Pt195Di",
   dev.off()
 }
 
-
-
+#TODO put option for trsanforming or not 
 plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(), 
                        clustering_markers = "CD|HLA|IgD|PD|BAFF|TCR", 
                        functional_markers = NULL, 
@@ -895,8 +969,8 @@ plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(),
   #   ff_agg <- read.FCS(ff_agg)
   # } else {
   
-  files_list <- list(files_before_norm = files_before_norm, 
-                     files_after_norm = files_after_norm)
+  files_list <- list("files_before_norm" = files_before_norm, 
+                     "files_after_norm" = files_after_norm)
   
   plots <- list()
   for (name in names(files_list)) {
@@ -915,7 +989,9 @@ plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(),
                                       cytofTransform))
     
     markers <- get_markers(ff_agg, colnames(ff_agg))
-    cl_markers <- grep(clustering_markers, markers, value = T)
+    
+    cl_markers <- paste(clustering_markers, collapse="|")
+    cl_markers <- grep(cl_markers, markers, value = T)
     
     ff_agg@exprs[, names(cl_markers)] <- apply(ff_agg@exprs[, names(cl_markers)], 2, function(x){
       q <- quantile(x, 0.9999)
@@ -923,18 +999,20 @@ plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(),
       x
     })
     
-    # set.seed(1)
-    # ff_samp <- ff_agg@exprs[sample(nrow(ff_agg@exprs), 135000), ]
+    set.seed(1)
+    samp <- length(files_list[[name]])
+    ff_samp <- ff_agg@exprs[sample(nrow(ff_agg@exprs), samp*500), ]
     
+    
+    #TODO use the ce of nocicka do show mds or umap but by sample ypu have a code in TODO doc in google
     set.seed(123)
-    dimred_res <- uwot::umap(X = ff_agg@exprs[, names(cl_markers)], 
+    dimred_res <- uwot::umap(X = ff_samp[, names(cl_markers)], 
                              n_neighbors = 15, scale = TRUE)
     
-    
     dimred_df <- data.frame(dim1 = dimred_res[,1], dim2= dimred_res[,2],
-                            ff_agg@exprs[, names(cl_markers)])
+                            ff_samp[, names(cl_markers)])
     
-    dimred_df$file_id <- ff_agg@exprs[,"File2"]
+    dimred_df$file_id <- ff_samp[,"File2"]
     dimred_df$batch <- NA
     
     for (i in 1:length(files_list[[name]])){
@@ -945,7 +1023,7 @@ plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(),
     }
     
     p <- ggplot(dimred_df,  aes_string(x = "dim1", y = "dim2", color = "batch")) +
-      geom_point(size = 0.8) +
+      geom_point(aes(color = batch), size = 0.8, position="jitter") +
       theme_bw() +
       ggtitle(name)+
       # scale_color_manual(values=col )+
@@ -956,6 +1034,16 @@ plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(),
     p 
     plots[[name]] <- p
     
+    # if (!(is.null(functional_markers))){
+    #   
+    #   names <- gsub("_CC_gated.fcs|gated.fcs|.fcs", "", basename(files_list[[name]]))
+    #   labels <- str_match(basename(files_list[[name]]), batch_pattern)[,1]
+    #   
+    #   plot_aggregate(names = names, files = files_list[[name]], 
+    #                  markers = functional_markers, arcsine_transform = TRUE, 
+    #                  labels = labels, flow_frame_agg = ff_agg, 
+    #                  output_image = file.path(out_dir, paste0(name, "_aggregate.png")))
+    # }
   }
   
   pdf(file.path(norm_dir, "batch_effect"), width = length(plots)*6, height = 6)
@@ -965,18 +1053,101 @@ plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(),
   
   if (!(is.null(functional_markers))){
     
-    batch_id <- stringr::str_match(basename(files_after_norm), 
-                                   batch_pattern)[,1]
-    file_id <- gsub("_CC_gated.fcs|.fcs|_gated.fcs|Norm_", "", basename(files_after_norm))
+    # batch_id <- stringr::str_match(basename(files_after_norm), 
+    #                                batch_pattern)[,1]
+    # file_id <- gsub("_CC_gated.fcs|.fcs|_gated.fcs|Norm_", "", basename(files_after_norm))
     
-    plot_marker_quantiles(fcs_files = files_after_norm, file_batch_id = batch_id, 
-                          file_id = file_id, arcsine_transform = TRUE, 
-                          markers_to_plot = functional_markers, out_dir = out_dir)
+    markers <- c(clustering_markers, functional_markers)
+    plot_marker_quantiles(files_after_norm = files_after_norm, 
+                          files_before_norm = files_before_norm,
+                          batch_pattern = batch_pattern, 
+                          # file_id = file_id, 
+                          arcsine_transform = TRUE, 
+                          markers_to_plot = markers, out_dir = out_dir)
     
   }
 }
 
-
+plot_aggregate <- function(names = NULL, 
+                           files = files, 
+                           markers = NULL, 
+                           labels = NULL, 
+                           output_image = "aggregate.png", 
+                           flow_frame_agg = NULL,
+                           arcsine_transform = TRUE,
+                           max_nm = 6 * 5000, #6 * 100000
+                           ymargin = c(-2,10),
+                           agg_name = "File2",
+                           colors_man = NULL){ #c(-5,10) for manual transformations, #c(-100,300) for FlowJO transformations
+  
+  if (!is.null(flow_frame_agg)){
+    ff <- AggregateFlowFrames(fileNames = files, maxcells = 1000, 
+                              cTotal = length(files)*1000, writeOutput = FALSE, 
+                              outputFile = FALSE, writeMeta = FALSE)
+  }
+  
+  matches <- paste(markers, collapse="|")
+  m <- grep(matches, get_markers(ff, colnames(ff)), 
+            ignore.case = TRUE, value = TRUE)
+  ch <- get_channels(ff, m)
+  
+  if(arcsine_transform == TRUE){
+    
+    ff <- transform(ff, transformList(ch, cytofTransform))
+  }
+  
+  data <- ff@exprs
+  file_values <- data[,agg_name]
+  #file_values_scattered <- data[,gsub("File","File_scattered",agg_name)]
+  
+  subset <- sample(seq_len(nrow(data)), min(max_nm, nrow(data)))
+  if(is.null(markers)) {
+    data <- data[subset,]
+  } else {
+    data <- data[subset, ch]
+  }
+  
+  file_values <- file_values[subset]
+  file_values_scattered <- file_values + stats::rnorm(length(file_values), 
+                                                      0, 0.1)
+  channels <- colnames(data)
+  nrows_in_plot <- floor(sqrt(length(channels)))
+  ncols_in_plot <- ceiling(length(channels)/nrows_in_plot)
+  png(output_image, width = 800*ncols_in_plot, height = 1000*nrows_in_plot)
+  par(mar = c(30.1, 12.1, 2.1, 2.1))
+  layout(matrix(seq_len(nrows_in_plot * ncols_in_plot), nrow = nrows_in_plot, 
+                byrow = TRUE))
+  if (is.null(labels)) {
+    colors <- "#00000055"
+  } else {
+    labels <- factor(labels)
+    color_palette <- colorRampPalette(RColorBrewer::brewer.pal(9,
+                                                               "Set1"))
+    colors <- paste0(color_palette(length(levels(labels))),
+                     "55")
+    if (is.null(colors_man)) {
+      colors <- colors[labels][file_values]
+    } else {
+      colors <- colors_man[labels][file_values]
+    }
+  }
+  xlabels <- names#labels 
+  for (channel in channels) {
+    print(FlowSOM::get_markers(ff, channel))
+    plot(0,
+         type = "n", xaxt = "n",
+         xlab = "", ylab = FlowSOM::get_markers(ff, channel),
+         cex.lab = 5,
+         ylim = ymargin, 
+         xlim = c(0, length(files) + 1))
+    abline(v = seq_len(length(files)), col = "lightgrey")
+    axis(side = 1, at = seq_len(length(files)), labels = xlabels, 
+         las = 2, cex.axis = 1.5)
+    points(file_values_scattered, data[, channel], pch = ".", 
+           col = colors, cex = 3)
+  }
+  dev.off()
+}
 
 
 

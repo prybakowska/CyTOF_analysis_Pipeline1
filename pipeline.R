@@ -4,22 +4,19 @@ source('~/Documents/CyTOF_workflow/CytofPipeline1/functions.R')
 
 
 # set working directory
-dir <- "/home/paulina/Documents/CyTOF_workflow/data"
+dir <- "/home/paulina/Documents/CyTOF_workflow/data_cyt"
 setwd(dir)
 
+# ------------------------------------------------------------------------------
+# Download data from flowrepository --------------------------------------------
+#-------------------------------------------------------------------------------
 
-# # !!! TODO !!!
-# # this can be done wit flowrepositry package 
-# zipFile <- "/home/paulina/Downloads/FlowRepository_FR-FCM-ZYND_files.zip"
-# projectDir <- "/home/paulina/Documents/CyTOF_workflow/data"
-# dataDir <- file.path(projectDir, "RawFiles")
-# if(!dir.exists(dataDir))(dir.create(dataDir))
-# 
-# unzip(zipFile, exdir = dataDir)
-# 
-# dir <- "/home/paulina/Documents/CyTOF_workflow/data"
-# raw_data_dir <- file.path(dir, "RawFiles")
-# dir.exists(raw_data_dir)
+# connect to flowrepository data
+ds <- flowRep.get("FR-FCM-ZZJ7") # TODOD change the number to your flowrepository 
+summary(ds)
+
+# Download the flowrepository data
+ds <- download(object = ds, dirpath = file.path(dir, "RawFiles_trail")) 
 
 # ------------------------------------------------------------------------------
 # Bead normalization -----------------------------------------------------------
@@ -36,7 +33,7 @@ if(!dir.exists(bead_norm_dir)) dir.create(bead_norm_dir)
 files <- list.files(file.path(raw_data_dir), pattern = ".FCS$", full.names = T)
 
 # create reference sample to which all the files will be normalized 
-ref_sample <- create_ref(fcs_file = files[1], beads = "dvs")
+ref_sample <- create_ref(fcs_files = files, beads = "dvs", out_dir = bead_norm_dir)
 
 # Normalize file by file in the loop, saving new file with each loop execution
 for (file in files){
@@ -47,14 +44,45 @@ for (file in files){
   # bead normalize the files
   ff_norm <- bead_normalize(flow_frame = ff, keep_all_markers = FALSE, 
                             out_dir = bead_norm_dir, norm_to_ref = ref_sample, 
-                            to_plot = TRUE)
+                            to_plot = TRUE, 
+                            markers_to_keep = c("PD","CD", "HLA", "IgD", "TCR", 
+                                                "BAFF", "Ir", "Viability","IL",
+                                                "TNF", "TGF", "MIP", "MCP", "Granz"))
   
   # write FCS files
   write.FCS(ff_norm, filename = file.path(bead_norm_dir, 
                                  gsub(".FCS","_beadNorm.fcs", basename(file)))) 
-
 }
-  
+
+# ------------------------------------------------------------------------------
+# Visualized files after bead normalization  -----------------------------------
+#-------------------------------------------------------------------------------
+
+# Set input directory 
+raw_data_dir <- file.path(dir, "RawFiles")
+bead_norm_dir <- file.path(dir, "BeadNorm")
+
+# Define files for visualization
+
+# before normalization 
+files_b <- list.files(file.path(raw_data_dir), pattern = ".FCS$", 
+                    full.names = TRUE)
+
+# after normalization 
+files_a <- list.files(file.path(bead_norm_dir), pattern = "_beadNorm.fcs$", 
+                    full.names = TRUE)
+
+# Define batch id and sample id for each file
+batch_pattern <- str_match(basename(files_b), ".*(day[0-9]*).*.FCS")[,2]
+# file_id <- str_match(basename(files_b), ".*day[0-9]*_[0-9]*.*.FCS$")[,2]
+
+plot_marker_quantiles(files_after_norm = files_a, files_before_norm = files_b, 
+                      batch_pattern = batch_pattern, arcsine_transform = TRUE,
+                      file_id = NULL,
+                      markers_to_plot = c("CD", "HLA", "IgD", "IL", "TNF",
+                                          "TGF", "GR"), 
+                      out_dir = bead_norm_dir)
+
 # ------------------------------------------------------------------------------
 # Signal Cleaning --------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -66,7 +94,7 @@ bead_norm_dir <- file.path(dir, "BeadNorm")
 clean_dir <- file.path(dir, "Cleaned")
 if(!dir.exists(clean_dir)) dir.create(clean_dir)
 
-# Define which files will be normalized
+# Define which files will be cleaned
 files <- list.files(file.path(bead_norm_dir), pattern = "_beadNorm.fcs$", 
                     full.names = TRUE)
 
@@ -92,26 +120,6 @@ for (file in files) {
 }
 
 # ------------------------------------------------------------------------------
-# Files inspection -------------------------------------------------------------
-#-------------------------------------------------------------------------------
-
-# Set input directory 
-clean_dir <- file.path(dir, "Cleaned")
-
-# Define files for visualization
-files <- list.files(file.path(clean_dir), pattern = "_cleaned.fcs$", 
-                    full.names = TRUE)
-
-# Define batch id and sample id for each file
-file_batch_id <- str_match(basename(files), "(RUN[0-9]*)_[0-9]*_.*.fcs")[,2]
-file_id <- str_match(basename(files), "RUN[0-9]*_([0-9]*)_.*.fcs")[,2]
-
-plot_marker_quantiles(fcs_files = files, file_batch_id = file_batch_id, 
-                      file_id = file_id, arcsine_transform = TRUE, 
-                      out_dir = clean_dir, markers_to_plot = NULL)
-
-
-# ------------------------------------------------------------------------------
 # Files outliers detection -----------------------------------------------------
 #-------------------------------------------------------------------------------
 
@@ -124,7 +132,7 @@ files <- list.files(file.path(clean_dir), pattern = "_cleaned.fcs$",
 
 # Define batch_id for each file 
 file_batch_id <- stringr::str_match(basename(files), 
-                                    "(RUN[0-9]*)_[0-9]*_.*.fcs")[,2]
+                                    "(day[0-9]*)_[0-9]*_.*.fcs")[,2]
 
 # Define out_dir for diagnostic plots
 quality_dir <- file.path(dir, "Quality_control")
@@ -132,8 +140,7 @@ quality_dir <- file.path(dir, "Quality_control")
 file_quality_check(fcs_files = files, file_batch_id = file_batch_id, 
                    out_dir = quality_dir,
                    phenotyping_markers = c("Ir","CD", "HLA", "IgD", "Pt"), 
-                   arcsine_transform = TRUE)
-
+                   arcsine_transform = TRUE, sd = 3)
 
 # ------------------------------------------------------------------------------
 # Files debarcoding ------------------------------------------------------------
@@ -156,20 +163,21 @@ good_files <- file_scores$file_names[file_scores$quality == "good"]
 fcs_files_clean <- files[basename(files) %in% good_files]
 
 file_batch_id <- stringr::str_match(basename(fcs_files_clean), 
-                                    "(RUN[0-9]*)_[0-9]*_.*.fcs")[,2]
+                                    "(day[0-9]*)_[0-9]*_.*.fcs")[,2]
 
-barcodes_list <- list("RUN1" = rownames(sample_key)[c(1:16)], 
-                      "RUN2" = rownames(sample_key)[c(5:20)])
+barcodes_list <- list("day1" = rownames(sample_key)[c(2:6, 8:13, 15)], 
+                      "day2" = rownames(sample_key)[c(6:17)],
+                      "day3" = rownames(sample_key)[c(8:19)])
 
 debarcode_files(fcs_files = fcs_files_clean, 
                 out_dir = debarcode_dir, min_threshold = TRUE, 
                 barcodes_used = barcodes_list, file_batch_id = file_batch_id)
 
 
-#TODO check bad quality files
+# TODO check bad quality files
 # ------------------------------------------------------------------------------
 # Files aggregation ------------------------------------------------------------
-#-------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 # Set input directory 
 debarcode_dir <- file.path(dir, "Debarcoded")
@@ -189,12 +197,12 @@ md <- read.csv(file.path(dir, "meta_data.csv"))
 md$barcode_name <- paste0(rownames(sample_key)[md$BARCODE])
 
 # assign new sample names specifying patient id and its batch name 
-md$fcs_new_name <- paste0(md$PATIENT_ID, "_", md$RUN, ".fcs")  
+md$fcs_new_name <- paste0(md$ID, "_", md$STIM, "_", md$BATCH, ".fcs")  
 
 # aggregate files batch by batch 
 for (i in seq_len(nrow(md))){
   
-  patterns <- as.character(md[i, c("barcode_name", "RUN")])
+  patterns <- as.character(md[i, c("barcode_name", "BATCH")])
   
   files_to_agg <- grep(pattern = patterns[2],
                        grep(pattern = patterns[1], files, value = TRUE), 
@@ -203,7 +211,8 @@ for (i in seq_len(nrow(md))){
   print(paste0("Creating ", md[[i, "fcs_new_name"]]))
   
   aggregate_files(fcs_files = files_to_agg,
-                  outputFile = file.path(aggregate_dir, md[[i, "fcs_new_name"]]))
+                  outputFile = file.path(aggregate_dir, md[[i, "fcs_new_name"]]),
+                  write_agg_file = TRUE)
 }
 
 
@@ -211,7 +220,7 @@ for (i in seq_len(nrow(md))){
 # Files gating -----------------------------------------------------------------
 #-------------------------------------------------------------------------------
 
-# open cytofcelan GUI and select the file sthat you want to gate, 
+# open cytofcelan GUI and select the file that you want to gate, 
 # de-select bead removal 
 
 cytofclean::cytofclean_GUI()
@@ -239,40 +248,40 @@ gate(fcs_files = files, cd45_ch = "Pr141Di", viability_ch = "Pt195Di",
 gate_dir <- file.path(dir, "Gated")
 
 # Define files for debarcoding
-files_ref <- list.files(file.path(gate_dir), pattern = "REF.*_gated.fcs$", 
+files_ref <- list.files(file.path(gate_dir), pattern = "p1_REF.*_gated.fcs$", 
                     full.names = TRUE, recursive = T)
 
 #
 labels_ref <- stringr::str_match(basename(files_ref), 
-                                   ".*_(RUN[0-9]*).*.fcs")[,2]
+                                   ".*_(day[0-9]*).*.fcs")[,2]
 
-ff <- read.FCS(files[1])
-channels <- grep("Pd|Rh", grep("Di", colnames(ff), value = T), 
+ff <- read.FCS(files_ref[1])
+channels <- grep("Pd|Rh|140", grep("Di", colnames(ff), value = T), 
                  value = T, invert = T) #TODO channels should not have pd 
 
-# Define out_dir for aggtegated files
+# Define out_dir for aggregated files
 norm_dir <- file.path(dir, "CytoNormed")
 if(!dir.exists(norm_dir))(dir.create(norm_dir))
 
-png(file.path(norm_dir, "001_099_normalization.png"),
+png(file.path(norm_dir, "005_095_normalization.png"),
     width = length(channels) * 300,
     height = (length(files_ref) * 2 + 1) * 300)
 model <- QuantileNorm.train(files = files_ref,  labels = labels_ref, 
                             channels = channels, 
                             transformList = transformList(channels, 
                                                           cytofTransform), 
-                            nQ = 2, quantileValues = c(0.01, 0.99), goal = "mean", 
+                            nQ = 2, quantileValues = c(0.05, 0.95), goal = "mean", 
                             plot = TRUE)
 dev.off()
 
-saveRDS(object = model, file = file.path(norm_dir, "001_099_model.RDS"))
+saveRDS(object = model, file = file.path(norm_dir, "005_095_model.RDS"))
 
 
 files <- list.files(file.path(gate_dir), pattern = "_gated.fcs$", 
                         full.names = TRUE, recursive = T)
 
 labels <- stringr::str_match(basename(files), 
-                             ".*_(RUN[0-9]*).*.fcs")[,2]
+                             ".*_(day[0-9]*).*.fcs")[,2]
 
 QuantileNorm.normalize(model = model, files = files, labels = labels, 
                        transformList = transformList(channels, 
@@ -282,16 +291,103 @@ QuantileNorm.normalize(model = model, files = files, labels = labels,
                        outputDir = norm_dir)
 
 # show how to see the batch effect 
+batch_pattern <- "day[0-9]*"
 
 files_before_norm <- list.files(gate_dir, pattern = ".fcs", full.names = T)
+batch <- str_match(files_before_norm, "day[0-9]*")[,1]
+files_before_norm <- files_before_norm[order(factor(batch))]
+
 files_after_norm <- list.files(norm_dir, pattern = ".fcs", full.names = T)
+batch <- str_match(files_after_norm, "day[0-9]*")[,1]
+files_after_norm <- files_after_norm[order(factor(batch))]
 
-plot_batch(files_before_norm = files_before_norm, files_after_norm = files_after_norm,
-           out_dir = norm_dir, batch_pattern = "RUN[0-9]*" )
+plot_batch(files_before_norm = files_before_norm, 
+           files_after_norm = files_after_norm,
+           out_dir = norm_dir, batch_pattern = batch_pattern, 
+           clustering_markers = c("CD", "IgD", "HLA"),
+           functional_markers = c("IL", "Gran", "TNF", "TGF", "MIP", "MCP"))
 
-# TODO add option for plotting cytokines!!!!
+
+# ------------------------------------------------------------------------------
+# Runa UMAP y map manual labels ------------------------------------------------
+#-------------------------------------------------------------------------------
+
+# Set input directory 
+gate_dir <- file.path(dir, "Gated")
+
+# Set output directory 
+analysis_dir <- file.path(dir, "Analysis")
+
+if (!dir.exists(analysis_dir)) { 
+  dir.create(analysis_dir)
+}
+
+files <- list.files(gate_dir, pattern = ".fcs$", full.names = TRUE)
+batch_pattern <- str_match(basename(files), ".*(day[0-9]*).*.fcs")[,2]
 
 
+plot_UMAP <- function(fcs_files = files, clustering_markers = c("CD", "HLA", "IgD"),
+                      out_dir = analysis_dir, batch_pattern = "day[0-9]*"){
+  
+  set.seed(1)
+  ff_agg <- AggregateFlowFrames(fileNames = fcs_files,
+                                cTotal = length(fcs_files) * 1000,
+                                verbose = TRUE,
+                                writeMeta = FALSE,
+                                writeOutput = FALSE,
+                                outputFile = file.path(out_dir, paste0("norm_REF_aggregated_", ".fcs")))
+  
+  ff_agg <- transform(ff_agg,
+                      transformList(grep("Di", colnames(ff_agg), value = TRUE), 
+                                    cytofTransform))
+  
+  markers <- get_markers(ff_agg, colnames(ff_agg))
+  
+  cl_markers <- paste(clustering_markers, collapse="|")
+  cl_markers <- grep(cl_markers, markers, value = T)
+  
+  ff_agg@exprs[, names(cl_markers)] <- apply(ff_agg@exprs[, names(cl_markers)], 2, function(x){
+    q <- quantile(x, 0.9999)
+    x[x > q] <- q
+    x
+  })
+  
+  samp <- length(fcs_files)
+  
+  set.seed(1)
+  ff_samp <- ff_agg@exprs[sample(nrow(ff_agg@exprs), samp*500), ]
+  
+  
+  #TODO use the ce of nocicka do show mds or umap but by sample ypu have a code in TODO doc in google
+  set.seed(123)
+  dimred_res <- uwot::umap(X = ff_samp[, names(cl_markers)], 
+                           n_neighbors = 15, scale = TRUE)
+  
+  dimred_df <- data.frame(dim1 = dimred_res[,1], dim2= dimred_res[,2],
+                          ff_samp[, names(cl_markers)])
+  
+  dimred_df$file_id <- ff_samp[,"File2"]
+  dimred_df$batch <- NA
+  
+  for (i in 1:length(fcs_files)){
+    
+    file <- fcs_files[i]
+    batch <- stringr::str_match(file, batch_pattern)[,1]
+    dimred_df[dimred_df[, "file_id"] == i, "batch"] <- batch
+  }
+  
+  p <- ggplot(dimred_df,  aes_string(x = "dim1", y = "dim2", color = "batch")) +
+    geom_point(aes(color = batch), size = 0.8, position="jitter") +
+    theme_bw() +
+    # ggtitle()+
+    # scale_color_manual(values=col )+
+    # scale_color_gradientn(norm_markers[m], 
+    #                       colours = colorRampPalette(rev(brewer.pal(n = 11, name = "Spectral")))(50))+
+    theme(legend.position = "bottom")
+  
+  p 
+  
+}
 
 
 
