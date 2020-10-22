@@ -103,6 +103,11 @@ if (!require("RColorBrewer")) {
   library(RColorBrewer)
 }
 
+if (!require("ggpubr")) {
+  install.packages("ggpubr")
+  library(ggpubr)
+}
+
 
 
 

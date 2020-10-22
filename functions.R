@@ -1,13 +1,12 @@
+
 #' @description Finds all the mass channels
-#' @param flow_frame Untranfosrmed flow frame
+#' @param flow_frame Untransformed flow frame
 #' @param channels Pattern for non-mass channels
 #' @param ... Additional arguments to pass to grep
 #' @return Logical vector with TRUE values for mass channels
 
-
 check <- function(x) tryCatch(if(class(x) == 'logical') 1 else 1, 
                               error=function(e) 0)
-
 
 find_mass_ch <- function(flow_frame, 
                          channels = "Time|Event_length|Center|Offset|Width|Residual",
@@ -20,14 +19,16 @@ find_mass_ch <- function(flow_frame,
 
 
 #' @description Cleans the flow rate using functions from flowAI package.
-#' @param flow_frame Flow frame.
-#' @param to_plot Logical if to plot cleaning results.
+#' @param flow_frame Untransformed flow frame
+#' @param to_plot Logical if to plot cleaning results, default is set to TRUE.
 #' @param out_dir Character, pathway to where the plots should be saved, 
 #' only if argument to_plot = TRUE, default is set to working directory.
-#' @return Cleand, untransformed flow frame
+#' @param alpha numeric, as in flow_auto_qc {flowAI}. The statistical 
+#' significance level used to accept anomalies. The default value is 0.01.
+#' @return Cleand, untransformed flow frame.
 
 clean_flow_rate <- function(flow_frame, to_plot = TRUE, 
-                            out_dir = getwd()) {
+                            out_dir = getwd(), alpha = 0.01) {
   
   flow_frame@exprs[, "Time"] <- flow_frame@exprs[, "Time"]/100
   
@@ -37,7 +38,7 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
   
   FlowRateQC <- flowAI:::flow_rate_check(flow_frame, 
                                          FlowRateData, 
-                                         alpha = 0.01, 
+                                         alpha = alpha, 
                                          use_decomp = TRUE) 
   
   if (to_plot == TRUE){
@@ -63,8 +64,9 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
   return(flow_frame_cl)
 }
 
-#' @description Cleans the flow rate using functions from flowAI package
-#' @param flow_frame Flow frame
+#' @description Cleans the signal using flowCut package
+#' @param flow_frame Flow frame, if unstransformed arcsine_transform should be 
+#' kept as default, TRUE.
 #' @param channels_to_clean Character vector of the channels that needs to be cleaned
 #' @param to_plot Characer variable that indicates if plots should be genarated.
 #' The default is "All", which generates plot for all channels. Other options are
@@ -73,15 +75,21 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
 #' @param out_dir Character, pathway to where the plots should be saved, 
 #' only if argument to_plot = TRUE, default is set to working directory.
 #' @param arcsine_transform Logical, if the data should be transformed with 
-#' arcsine transformation and cofactor 5.
+#' arcsine transformation and cofactor 5, default is set to TRUE
+#' @param non_used_bead_ch Character vector, bead channels that does not contain 
+#' any marker information, thus do not need to be cleaned andused for further analysis
 #' @param ... Additional arguments to pass to flowcut.
-#' @return Cleand, untransformed flow frame.
+#' @return Cleaned, untransformed flow frame if arcsine_transform argument
+#'  set to TRUE, otherwise transformed flow frame is returned
 
 clean_signal <- function(flow_frame, channels_to_clean = NULL, to_plot = "All", 
-                         out_dir = getwd(), arcsine_transform = TRUE,  ...){
+                         out_dir = getwd(), arcsine_transform = TRUE, 
+                         non_used_bead_ch = NULL, ...){
   
   channels_to_transform <- find_mass_ch(flow_frame, value = FALSE)
+  
   if (arcsine_transform == TRUE){
+
     ff_t <- transform(flow_frame, 
                       transformList(colnames(flow_frame)[channels_to_transform], 
                                     CytoNorm::cytofTransform))
@@ -101,12 +109,18 @@ clean_signal <- function(flow_frame, channels_to_clean = NULL, to_plot = "All",
     
   } else {
     
-    ind_Time <- grep("TIME", toupper(colnames(flow_frame)))
-    ch_to_clean <- c(ind_Time, channels_to_transform)
-    ind_140 <- grep("140", toupper(colnames(flow_frame)))
-    channels <- ch_to_clean[ch_to_clean != 14]
-  
+    if (!is.null(non_used_bead_ch)) {
+      non_bead_ch <- "140"
+    } else {
+      non_bead_ch <- paste(non_used_bead_ch, collapse="|")
     }
+
+    ind_Time <- grep("TIME", colnames(flow_frame), value = T, ignore.case = T)
+    ch_to_clean <- c(ind_Time, find_mass_ch(flow_frame, value = TRUE))
+    ind_nonbeads <- grep(non_bead_ch, colnames(flow_frame), value = TRUE)
+    channels <- ch_to_clean[!(ch_to_clean %in% ind_nonbeads)] 
+    channels <- grep(paste(channels, collapse = "|"), colnames(flow_frame))
+  }
   
   out_dir <- file.path(out_dir, "SignalCleaning")
   if(!dir.exists(out_dir)){
@@ -123,8 +137,7 @@ clean_signal <- function(flow_frame, channels_to_clean = NULL, to_plot = "All",
                           Directory = out_dir,
                           UseOnlyWorstChannels = TRUE,
                           AllowFlaggedRerun = TRUE,
-                          AlwaysClean = TRUE,
-                          ...)
+                          AlwaysClean = TRUE, ...)
   
   ff_t_clean <- cleaned_data$frame
   
@@ -139,39 +152,30 @@ clean_signal <- function(flow_frame, channels_to_clean = NULL, to_plot = "All",
   return(ff_clean)
 }
 
-#' @description Creates the reference flowframe which bead´s values will be used as reference 
-#'for other files during the normalization.
-#' @param fcs_files Path to selected fcs file which will be used as reference 
-#'file upon normalization.
-#' @param beads The same as in CATALYAST package, character variable:
+#' @description Creates the reference flowframe for which bead´s mean values will 
+#' be computed and use during the normalization.
+#' @param fcs_files Path to fcs files to be normalized
+#' @param beads The same as in normCytof from CATALYAST package, character variable:
 #'"dvs" (for bead masses 140, 151, 153 ,165, 175) or 
 #'"beta" (for bead masses 139, 141, 159, 169, 175) or a numeric vector of masses.
+#' @param to_plot Logicle variable that indicates if plots should be genarated, 
+#' default set to FALSE
+#' @param out_dir Character, pathway to where the plots should be saved, 
+#' only if argument to_plot = TRUE, default is set to working directory.
+#' @param k the same as in normCytof from CATALYST package, integer width of the 
+#' median window used for bead smoothing (affects visualizations only!).
+#' @param ... Additional arguments to pass to normCytof
+#' @param ncells number of cells to be aggregated per each file, 
+#' default is set to 25000, so around 250 beads can be aggregated per each file 
+#' @return returns reference flow frame 
 
-create_ref <- function(fcs_files, beads = NULL, to_plot = TRUE, 
-                       out_dir = getw(), k = 80){
-  
-  # if (!file.exists(fcs_file[1])){
-  #   stop("incorrect file path, the fcs file does not exist")
-  # }
-  
-  # print(paste("preparing reference sample from ", 
-  #             basename(fcs_file)))
-  # dat <- prepData(fcs_file) 
-  # dat_norm <- normCytof(x = dat,
-  #                       beads = beads,
-  #                       remove_beads = TRUE,
-  #                       norm_to = NULL,
-  #                       k = 80,
-  #                       plot = FALSE, 
-  #                       verbose = FALSE, 
-  #                       transform = FALSE)
-  # ff_ref <- sce2fcs(dat_norm$beads)
-  # return(ff_ref)
-  
-  ff <- AggregateFlowFrames(fileNames = fcs_files, cTotal = length(fcs_files)*25000)
+create_ref <- function(fcs_files, beads = NULL, to_plot = FALSE, 
+                       out_dir = getw(), k = 80, ncells = 25000, ...){
+  # TODO ASKSOFIE if she could change the function so that only selected channels are in the aggregated files
+  ff <- AggregateFlowFrames(fileNames = fcs_files, cTotal = length(fcs_files)*ncells)
   
   dat <- prepData(ff) 
-  
+
   dat_norm <- normCytof(x = dat,
                         beads = beads,
                         remove_beads = TRUE,
@@ -179,7 +183,8 @@ create_ref <- function(fcs_files, beads = NULL, to_plot = TRUE,
                         k = k,
                         plot = to_plot, 
                         verbose = FALSE, 
-                        transform = FALSE)
+                        transform = FALSE, 
+                        ...)
   ff_ref <- sce2fcs(dat_norm$beads)
   rm(ff)
   
@@ -200,24 +205,35 @@ create_ref <- function(fcs_files, beads = NULL, to_plot = TRUE,
   return(ff_ref)
 }
 
-
-#' @description Performs bead normalization usinf function from CATALYST package.
+#' @description Performs bead normalization using function from CATALYST package.
+#' normalized fcs files and plots are stored in out_dir directory
 #' @param flow_frame Untranfosrmed flow frame.
-#' @param markers_to_keep Character vector, marker names to be plotted, can be 
-#' full marker name e.g. "CD45" or "CD" if all CD-markers needs to be plotted
-#' @param to_plot Logical if to plot bead gate and bead normalization for each 
+#' @param markers_to_keep Character vector, marker names to be kept after 
+#' the normalization, can be full marker name e.g. "CD45" or "CD". Additionally, 
+#' non_mass channels like Time, Event_lenght, Gaussian parameter and palladium 
+#' barcoding channels are kept
+#' If NULL (default) all markers will be normalized and kept in flowframe, 
+#' selection of the markers will reduce file volume and speedup the analysis. 
+#' @param to_plot Logical if to plot bead gate and bead normalization lines for each 
 #' file.
 #' @param out_dir Character, pathway to where the plots should be saved, 
 #' only if argument to_plot = TRUE, default is set to working directory.
+#' @param k the same as in normCytof from CATALYST package, integer width of the 
+#' median window used for bead smoothing (affects visualizations only!).
 #' @return Bead normalized flow frame without the beads.
+#' @param ... Additional arguments to pass to normCytof
 
-bead_normalize <- function(flow_frame, keep_all_markers = TRUE, 
+bead_normalize <- function(flow_frame,  
                            markers_to_keep = NULL, 
-                           beads = "dvs", norm_to_ref = NULL, 
-                           remove_beads = TRUE, to_plot = TRUE, 
-                           out_dir = getwd(), ...){
+                           beads = "dvs", 
+                           norm_to_ref = NULL, 
+                           remove_beads = TRUE, 
+                           to_plot = TRUE, 
+                           out_dir = getwd(), 
+                           k = 80, 
+                           ...){
   
-  if (keep_all_markers == FALSE){
+  if (!is.null(markers_to_keep)){
     
     if (is.null(markers_to_keep)){
       stop("pattern for markers needs to be specify")
@@ -229,7 +245,7 @@ bead_normalize <- function(flow_frame, keep_all_markers = TRUE,
                              ignore.case = TRUE, value = FALSE)
     
     non_mass_ch <- grep("Time|length|Ce140|151|153|165|175|Center|Offset|Width|
-                        |Residual", 
+                        |Residual|Pd", 
                         colnames(flow_frame),
                         ignore.case = TRUE, value = FALSE)
     
@@ -237,7 +253,7 @@ bead_normalize <- function(flow_frame, keep_all_markers = TRUE,
     channels_to_keep <- colnames(flow_frame)[sort(unique(channels_to_keep))]
     
     flow_frame <- flow_frame[, channels_to_keep]
-  }
+  } 
   
   if (is.null(norm_to_ref)){
     warning("the reference file is not defined. Each file will be normalized 
@@ -251,9 +267,10 @@ bead_normalize <- function(flow_frame, keep_all_markers = TRUE,
                         beads = beads,
                         remove_beads = remove_beads,
                         norm_to = norm_to_ref,
-                        k = 80,
+                        k = k,
                         plot = TRUE, 
-                        transform = FALSE)
+                        transform = FALSE, 
+                        ...)
  
   # convert back to .fcs files and save 
   f <- sce2fcs(dat_norm$data)
@@ -281,22 +298,23 @@ bead_normalize <- function(flow_frame, keep_all_markers = TRUE,
 
 #' @description Calculates quantiles for selected markers and plots them as 
 #' diagnostic plot 
-#' @param fcs_files Character, full path to fcs_files.
-#' @param file_batch_id Character vector, batch label for each fcs_file, 
-#'the order needs to be the same as in fcs_files.
-#' @param file_id Character vector, file label (shorter file name) for each 
-#'fcs_file, the order needs to be the same as in fcs_files.
+#' @param files_before_norm Character, full path to the unnormalized fcs_files.
+#' @param files_after_norm Character, full path to the unnormalized fcs_files.
+#' @param batch_pattern Character, bach pattern to be match in the fcs file name
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5.
 #' @param markers_to_plot character vector, marker names to be plotted, can be 
 #' full marker name e.g. "CD45" or "CD" if all CD-markers needs to be plotted  
+#' @param out_dir Character, pathway to where the plots should be saved, 
+#' default is set to working directory.
 
 # Plot diagnostic plot for markers across each run 
-plot_marker_quantiles <- function(files_after_norm, files_before_norm, 
+plot_marker_quantiles <- function(files_before_norm,
+                                  files_after_norm, 
                                   batch_pattern,
-                                  file_id = NULL, 
                                   arcsine_transform = TRUE, 
-                                  markers_to_plot = NULL, out_dir = getwd()){
+                                  markers_to_plot = NULL, 
+                                  out_dir = getwd()){
   
   
   fcs_files <- c(files_after_norm, files_before_norm)
@@ -323,11 +341,9 @@ plot_marker_quantiles <- function(files_after_norm, files_before_norm,
                                                             value = TRUE)), 
                            value = TRUE)
     } else {
-      # TODO CHEK if else should be here
       norm_markers <- find_mass_ch(ff_tmp, value = TRUE)
       norm_markers <- get_markers(ff_tmp, norm_markers)
     }
-    
   }
   
   quantile_values <-  c(0.05, 0.25, 0.5, 0.75, 0.95)
@@ -365,8 +381,7 @@ plot_marker_quantiles <- function(files_after_norm, files_before_norm,
       }
     }
   }
-  
-  # quantiles$Batch <- file_batch_id
+ 
   quantiles$Sample <- gsub("Norm_", "", 
                            gsub("_CC_gated.fcs|_gated.fcs|_gated.fcs|_beadNorm.fcs|.FCS",
                                 "", basename(as.character(quantiles$File))))
@@ -394,24 +409,20 @@ plot_marker_quantiles <- function(files_after_norm, files_before_norm,
     scale_size_identity() +
     scale_alpha_identity() +
     facet_wrap(~ Marker + Batch, ncol = ncols, scales = "free_x") +
-    # facet_grid(~ Marker + Batch,  space = "free_x") +
     theme_minimal() + 
     theme(axis.text.x = element_text(angle = 90, hjust = 1),
           panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
           legend.position = "bottom")
-  # legend.justification=c(1,0), legend.position=c(1,-0.15)) +
-  # ggtitle(paste("Marker distribution across aliquots for each batch"))
   
   ggsave(filename = paste("Marker distribution across aliquots and batches.pdf"), 
          plot = p, 
          path = file.path(out_dir), 
          width = length(fcs_files)*0.25, height = length(norm_markers)*4, limitsize = F)
-  
 }
 
 #' @description Builds FlowSOM tree for the files scoring 
 #' @param fcs_files Character, full path to fcs_files.
-#' @param phenotyping_markers Character vector, marker names to be used for phenotyping,
+#' @param phenotyping_markers Character vector, marker names to be used for clustering,
 #' can be full marker name e.g. "CD45" or "CD" if all CD-markers needs to be plotted
 #' @param nCells Numeric, the total number of cells, to use for FlowSOM clustering. 
 #' This number is determined by total number of fcs files, as a defult 1000 cells 
@@ -421,9 +432,11 @@ plot_marker_quantiles <- function(files_after_norm, files_before_norm,
 #' @param nClus Numeric, exact number of clusters for metaclustering 
 #' @param out_dir Character, pathway to where the FlowSOM clustering plot should
 #'  be saved, default is set to working directory.
-#' @param pattern ?? check
+#' @param batch Character, aqusition batch that the fcs files are coming from.
+#' Pass to FlowSOM plot name, defult is set to NULL
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5.
+#' @return fsom object
 
 fsom_aof <- function(fcs_files, 
                      phenotyping_markers,
@@ -432,8 +445,8 @@ fsom_aof <- function(fcs_files,
                      ydim = 10,
                      nClus = 10,
                      out_dir, 
-                     # pattern = NULL,
-                     arcsine_transform, ...){
+                     batch = NULL,
+                     arcsine_transform){
   
   
   if(check(phenotyping_channels) == 0){
@@ -465,21 +478,38 @@ fsom_aof <- function(fcs_files,
              "orange", "violetred", "red4", "springgreen2",  "palegreen4",
              "tan", "tan2", "tan3", "brown", "grey70", "grey30")
   
-  pdf(file.path(out_dir, paste0("FlowSOM_clustering.pdf")))
+  if(!is.null(batch)){
+    filename <- paste0(batch, "_FlowSOM_clustering.pdf")
+  } else {
+    filename <- "FlowSOM_clustering.pdf"
+  }
+  
+  pdf(file.path(out_dir, filename))
   PlotStars(fsom$FlowSOM, main = "FlowSOM clustering", 
             backgroundValues = fsom$metaclustering, 
             backgroundColor = myCol)
   dev.off()
   
   return(fsom)
-  
 }
+
+#' @description Calculates AOF (Average Overlap Frequency) scores 
+#' @param fcs_files Character, full path to fcs_files.
+#' @param phenotyping_markers Character vector, marker names to be used for 
+#' clustering, can be full marker name e.g. "CD45" or "CD" if all CD-markers 
+#' needs to be plotted
+#' @param fsom FlowSOM object as generated by fsom_aof
+#' @param out_dir Character, pathway to where the AOF scores and plots should
+#' be saved, default is set to working directory.
+#' @param batch Character, aqusition batch that the fcs files are coming from.
+#' Pass to AOF plot names, defult is set to NULL
+#' @return data frame with the calculated AOF scores 
 
 aof_scoring <- function(fcs_files,
                         phenotyping_markers,
                         fsom,
                         out_dir,
-                        list_for_scores = NULL){
+                        batch = NULL){
   
   if(check(phenotyping_channels) == 0){
     
@@ -487,6 +517,11 @@ aof_scoring <- function(fcs_files,
     markers <- get_markers(ff_tmp, colnames(ff_tmp))
     phenotyping_channels <- grep(paste(phenotyping_markers, 
                                        collapse = ("|")), markers, value = TRUE)
+    
+   if(length(grep("Ir", phenotyping_channels)) > 1){
+     phenotyping_channels <- phenotyping_channels[-(grep("Ir", 
+                                                         phenotyping_channels)[2])]
+   }
   }
   
   aof_scores <- matrix(NA,
@@ -525,40 +560,57 @@ aof_scoring <- function(fcs_files,
   
   df <- as.data.frame(sample_scores)
   
-  # list_scores <- list("aof_scores" = aof_scores,
-  #                     "aof_scores_scaled" = aof_scores_scaled)
-  # 
-  # # aof <- c("aof_scores", "aof_scores_scaled")
-  # print(paste("plotting AOF scores for "))
-  # 
-  # for (name in names(list_scores)) {
-  #   
-  #   filename <- file.path(out_dir, paste0(name, ".pdf"))
-  #   pheatmap(list_scores[[name]],
-  #            #scale = "column", 
-  #            cluster_rows = FALSE, 
-  #            cluster_cols = FALSE,
-  #            display_numbers = TRUE,
-  #            #display_numbers = round(aof_scores, 3),
-  #            labels_col = phenotyping_channels,
-  #            labels_row = basename(rownames(list_scores[[name]])),
-  #            filename = filename, 
-  #            number_format = "%.1f", 
-  #            width = 10)
+  list_scores <- list("aof_scores_per_marker" = aof_scores,
+                      "sample_quality_score" = aof_scores_scaled)
   
+  for (name in names(list_scores)) {
+    
+    if(!is.null(batch)){
+      filename <- file.path(out_dir, paste0(batch, "_", name, ".pdf"))
+      main <- paste0(batch, "_", name) 
+    } else {
+      filename <- file.path(out_dir, paste0(name, ".pdf"))
+      main <- name
+    }
+    
+    pheatmap(list_scores[[name]],
+             cluster_rows = FALSE,
+             cluster_cols = FALSE,
+             display_numbers = TRUE,
+             labels_col = phenotyping_channels,
+             labels_row = basename(rownames(list_scores[[name]])),
+             filename = filename,
+             main = main,
+             number_format = "%.1f",
+             width = 10)
+  }
   
-  
-  #saveRDS(list_for_scores, file.path(output_dir, "aof_scores_all.RDS"))
+  saveRDS(list_scores, file.path(out_dir, "aof_scores_all.RDS"))
   return(df)
-  
 }
 
-#' @param out_dir Character, pathway to where the plots should be saved, 
+#' @description Detects outlier files based on sample AOF score, generates plot 
+#' for outlier and .csv file which indicates which fcs files could be discarded 
+#' from further analysis
+#' @param scores list of scores per aqusition batch or data frame of scores,
+#' both generated by aof_scoring 
+#' @param out_dir Character, pathway to where the plot and .csv files with files
+#' quality scores should be saved, default is set to getwd(). 
+#' @param sd how many standard deviation should be use to detect outliers  
 #' only if argument to_plot = TRUE, default is set to working directory
 
-plot_aof_all_files <- function(scores, out_dir, sd) {
+file_outlier_detecion <- function(scores, out_dir = getwd(), sd) {
   
-  df_scores <- do.call(rbind, scores)
+  if(!inherits(scores, "data.frame") & !inherits(scores, "list")){
+    stop("df scores are neither data frame nor list of the data frames")
+  }
+  
+  if(inherits(scores, "list")){
+    df_scores <- do.call(rbind, scores)
+  } else {
+    df_scores <- scores
+  }
+  
   df_scores$file_names <- basename(rownames(df_scores))
   
   scores_median <- median(df_scores$sample_scores)
@@ -580,9 +632,6 @@ plot_aof_all_files <- function(scores, out_dir, sd) {
     ylim(-0.5, max_pctgs) + 
     geom_hline(yintercept = scores_median + sd * scores_MAD, 
                linetype = "dashed", color = "darkgreen", size = 1)+
-    # geom_text(aes(x= 0, y= scores_median + sd * scores_MAD, label = 
-    #                 paste("threshold= ", round(scores_median + sd * scores_MAD, digits = 2)), 
-    #               vjust = -1, hjust = -0.2), color = "darkgreen", size = 6) + 
     annotate(geom="text", x = mean(as.numeric(as.factor(df_scores$file_names))), 
              y= max_score - 0.05*max_score, label=paste("N bad = ", bad_scores),
              color="red", size = 5) +
@@ -596,18 +645,17 @@ plot_aof_all_files <- function(scores, out_dir, sd) {
     scale_x_discrete(breaks = df_scores$file_names[df_scores$quality == "bad"])
   p
   
-  ggsave(filename = "AOF_scores.pdf", plot = p, path = file.path(out_dir))
-  
-  # bad_files <- sample_scores[which(sample_scores$vector == "red"),]
+  ggsave(filename = "AOF_score_per_sample.pdf", plot = p, path = file.path(out_dir))
   
   saveRDS(df_scores, file.path(out_dir, "AOF_sample_scores.RDS"))
   write.csv(df_scores, file = file.path(out_dir, "AOF_excluded_files.csv"))
   
-  return(df_scores)
+  # return(df_scores)
 }
 
 
-#' @description performs sample quality score 
+#' @description wraper function to perform sample quality scoring, it will create 
+#' Quality control folder where all the quality plots and files will be stored.
 #' @param fcs_files Character, full path to fcs_files.
 #' @param file_batch_id Character vector, batch label for each fcs_file, 
 #'the order needs to be the same as in fcs_files.
@@ -620,70 +668,72 @@ plot_aof_all_files <- function(scores, out_dir, sd) {
 #' channels will be used 
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5.
-#' @param sd numeric, number of standard deviation allowed for outlier detection. 
-#' Default = 3.
+#' @param sd numeric, number of standard deviation allowed for file outlier
+#' detection, default = 3.
 
-file_quality_check <- function(fcs_files, file_batch_id, 
+file_quality_check <- function(fcs_files, file_batch_id = NULL, 
                                out_dir, phenotyping_markers = NULL, 
                                arcsine_transform = TRUE, sd = 3){
   
   if(!dir.exists(out_dir)) dir.create(out_dir)
   
-  scores <- list()
-  
-  for (batch in unique(file_batch_id)){
+  if (!is.null(file_batch_id)) {
+    scores <- list()
+    for (batch in unique(file_batch_id)){
+      print(batch)
+      
+      files <- fcs_files[file_batch_id == batch]
+      fsom <- fsom_aof(fcs_files = files, phenotyping_markers = phenotyping_markers, 
+                       out_dir = out_dir, arcsine_transform = arcsine_transform,
+                       batch = batch)
+      
+      scores[[batch]] <- aof_scoring(fcs_files = files, phenotyping_markers = phenotyping_markers,
+                                     fsom = fsom, out_dir = out_dir, batch = batch)
+    }
     
-    files <- fcs_files[file_batch_id == batch]
-    
+  } else {
+    files <- fcs_files
     fsom <- fsom_aof(fcs_files = files, phenotyping_markers = phenotyping_markers, 
-                     out_dir = out_dir, arcsine_transform = arcsine_transform)
+                     out_dir = out_dir, arcsine_transform = arcsine_transform,
+                     batch = NULL)
     
-    scores[[batch]] <- aof_scoring(fcs_files = files, phenotyping_markers = phenotyping_markers, 
-                                   fsom = fsom, out_dir = out_dir)
-    
-    final_score <- plot_aof_all_files(scores = scores, out_dir = out_dir, 
-                                      sd = sd)
+    scores <- aof_scoring(fcs_files = files, phenotyping_markers = phenotyping_markers,
+                          fsom = fsom, out_dir = out_dir, batch = NULL)
   }
+  
+  final_score <- file_outlier_detecion(scores = scores, out_dir = out_dir, 
+                                       sd = sd)
 }
-
 
 #' @description performs sample debarcoding 
 #' @param fcs_files Character, full path to fcs_files.
-#' @param bad_quality_files Character, full path to the .RDS file that shows 
-#' which files should be removed due to bad quality events. Default NULL.
+#' @param file_batch_id Character vector, batch label for each fcs_file, 
+#' the order needs to be the same as in fcs_files.
 #' @param out_dir Character, pathway to where the plots should be saved, 
 #' only if argument to_plot = TRUE, default is set to working directory
 #' @param min_threshold if the minimal treshold for barcoding should be applied. 
 #' Default is set to 0.18.
 #' @param barcodes_used character, the names of the barcodes that were used, eg.
-#' barcode 1 is the same as A1. 
-#' @param file_batch_id Character vector, batch label for each fcs_file, 
-#'the order needs to be the same as in fcs_files.
+#' barcode 1 is the same as A1. If NULL ae the barcodes contained in sample_key 
+#' from CATALYST package will be used 
+#' @param less_than_th logicle, if file names for which debarcoding threshold lower than
+#' 0.18 should be saved in out_dir, default FALSE
 
 debarcode_files <- function(fcs_files, 
-                            out_dir = getwd(), min_threshold = TRUE, 
-                            barcodes_used = NULL, file_batch_id){
+                            file_batch_id,
+                            out_dir = getwd(), 
+                            min_threshold = TRUE, 
+                            barcodes_used = NULL, 
+                            less_than_th = FALSE){
   
   if(anyDuplicated(fcs_files) != 0){
     stop("names of fcs files are duplicated")
   }
   
-  # if(!is.null(bad_quality_files)){
-  #     file_scores <- readRDS(bad_quality_file)
-  #     selection <- file_scores$file_names[file_scores$quality == "good"]
-  #     
-  #     print(paste("following files were discarded from further analysis",
-  #          basename(fcs_files[!(basename(fcs_files) %in% selection)])))
-  #     
-  #     fcs_files_clean <- fcs_files[basename(fcs_files) %in% selection]
-  # } else {
-  #   fcs_files_clean <- fcs_files
-  # }
-  
   for (file in fcs_files){
     print(paste0("   ", Sys.time()))
     print(paste0("   Debarcoding ", file))
-    ff <- read.FCS(file)
+    ff <- read.FCS(file, transformation = FALSE)
      
     file_id <- which(file == fcs_files)
     batch_id <- file_batch_id[file_id]
@@ -708,9 +758,22 @@ debarcode_files <- function(fcs_files,
     # table(colData(dat)$bc_id)
     dat <- estCutoffs(dat)
     
+    less_than_th <- c()
     if (min_threshold == TRUE){
+      if(any(metadata(dat)$sep_cutoffs < 0.18)){
+        warning(paste0("cutoff lower than 0.18 has been detected for ", basename(file), 
+                      ", cutoff will be set to 0.18"))
+        less_than_th <- c(less_than_th, basename(file))
+      }
+      
       id <- metadata(dat)$sep_cutoffs < 0.18
       metadata(dat)$sep_cutoffs[id] <- 0.18 
+
+    } else {
+      if(any(metadata(dat)$sep_cutoffs < 0.18)){
+        warning(paste0("cutoff lower than 0.18 detected for ", basename(file))) 
+        less_than_th <- c(less_than_th, basename(file))
+      }
     }
     
     id <- is.na(metadata(dat)$sep_cutoffs)
@@ -725,7 +788,7 @@ debarcode_files <- function(fcs_files,
     dev.off()
     
     dat <- applyCutoffs(dat)
-    p <- plotEvents(dat)
+    p <- plotEvents(dat, n = 500)
     
     pdf(file.path(out_dir, paste(gsub(".fcs", "_debarcode_quality.pdf", 
                                       basename(file)))))
@@ -736,12 +799,7 @@ debarcode_files <- function(fcs_files,
     
     dat <- dat[, dat$bc_id !=0]
     fs <- sce2fcs(dat, split_by = "bc_id")
-    
-    # for (i in 1:length(fs)){
-    # 
-    #   ff <- fs[i]
-    #   rname <- paste0("_",rownames(ff@phenoData), ".fcs")
-    
+  
     tmp_dir <- file.path(out_dir, batch_id)
     if(!dir.exists(tmp_dir)) dir.create(tmp_dir)
     
@@ -751,17 +809,24 @@ debarcode_files <- function(fcs_files,
                   filename = paste0(rownames(fs@phenoData), "_", file_name, 
                                     "_debarcoded.fcs")) 
     
-    # }
+  }
+  
+  if(less_than_th == TRUE){
+    saveRDS(less_than_th, file.path(out_dir, "files_with_lower_debarcoding_threshold.RDS"))
   }
 }
 
-#' @description performs sample aggregation
+#' @description performs aggregation of debarcoded files
 #' @param fcs_files Character, full path to fcs_files.
 #' @param channels_to_keep Character vector with channel names to be kept. 
 #' Default NULL
-#' @param outputFile character, the names of the file that will be given
-#' @param maxcells numeric, maximum cells to randomly aggregate from each file
+#' @param outputFile Character, the names of the file that will be given
+#' @param maxcells Numeric, maximum cells to randomly aggregate from each file, 
+#' default is set to NULL
+#' @param write_agg_file Logicle, if the fcs files should be saved, if TRUE 
+#' files will be saved in getwd(). Default set to FALSE
 
+#TODO check fr_append column to describe what is channels_to_keep
 aggregate_files <- function(fcs_files, 
                             channels_to_keep = NULL,
                             outputFile = "aggregate.fcs", maxcells = NULL, 
@@ -827,44 +892,57 @@ aggregate_files <- function(fcs_files,
   return(flowFrame)
 }
 
+#' @description Performs gating using flowDensity package to obtain intact and 
+#' live cells, creates pdf plots with gating strategy used. 
+#' @param fcs_files Character, full path to fcs_files.
+#' @param viability_channel Character, channel used for viability staining
+#' @param out_dir Character, pathway to where the plot and gated fcs files 
+#' should be stored, defaults set to getwd()
+#' @param arcsine_transform arcsine_transform Logical, if the data should be transformed with 
+#' arcsine transformation and cofactor 5.
+# TODO check read ff because it should be without cyfoclean_dir
 
-
-gate <- function(fcs_files, cd45_ch = "Pr141Di", viability_ch = "Pt195Di",
-                 out_dir = getwd()) {
+gate <- function(fcs_files, viability_channel = "Pt195Di",
+                 out_dir = getwd(), arcsine_transform = TRUE) {
   
   n_plots <- 2  
   png(file.path(gate_dir,
                 paste0("gating.png")),
       width = n_plots * 300, height = length(files) * 300)
-  layout(matrix(1:(length(files) * n_plots), ncol = n_plots, byrow = TRUE))
+  layout(matrix(1:(length(fcs_files) * n_plots), ncol = n_plots, byrow = TRUE))
   
-  for(file in files){
+  for(file in fcs_files){
     
     print(paste0("Preprocessing ", file))
     print(Sys.time())
     
-    ff <- read.FCS(file.path(cytof_clean_dir, file), transformation = FALSE)
-    ff_t <- transform(ff, 
+    ff <- read.FCS(file, transformation = FALSE)
+    
+    if(arcsine_transform == TRUE){
+      
+      ff_t <- transform(ff, 
                       transformList(colnames(ff)[grep("Di", colnames(ff))], 
                                     CytoNorm::cytofTransform))
+    } else {
+      ff_t <- ff
+    }
     
     selection <- matrix(TRUE,
                         nrow = nrow(ff),
-                        ncol = 3,
+                        ncol = 2,
                         dimnames = list(NULL,
                                         c("intact", 
-                                          "life", 
-                                          "cd45")))
+                                          "live")))
     
     tr <- list()
     for(m in c("Ir193Di", "Ir191Di")){
       
       tr[[m]] <- c(deGate(ff_t, m,
                           tinypeak.removal = 0.8, upper = FALSE, use.upper = TRUE,
-                          alpha = 0.05, percentile = .95, verbose = F, count.lim = 3), #alpha
+                          alpha = 0.05, verbose = F, count.lim = 3), 
                    deGate(ff_t, m,
                           tinypeak.removal = 0.8, upper = TRUE, use.upper = TRUE,
-                          alpha = 0.1, percentile = .95, verbose = F, count.lim = 3)) #alpha
+                          alpha = 0.1, percentile = .95, verbose = F, count.lim = 3)) 
     }
     
     for(m in c("Ir193Di", "Ir191Di")){
@@ -881,9 +959,9 @@ gate <- function(fcs_files, cd45_ch = "Pr141Di", viability_ch = "Pt195Di",
     points(ff_t@exprs[!selection[,"intact"], c("Ir193Di", "Ir191Di")], pch = ".")
     
     subset <- selection[, "intact"]
-    selection[, "life"] <- subset
+    selection[, "live"] <- subset
     
-    v_ch <- grep(viability_ch, colnames(ff), value = T)
+    v_ch <- grep(viability_channel, colnames(ff), value = T)
     
     tr <- list()
     for(m in c("Ir191Di", v_ch)){
@@ -898,7 +976,7 @@ gate <- function(fcs_files, cd45_ch = "Pr141Di", viability_ch = "Pt195Di",
         alpha = 0.05
         tr[[m]] <- c(deGate(ff_t[subset,], m,
                             tinypeak.removal = 0.2, upper = FALSE, use.upper = TRUE,
-                            alpha = 0.03, percentile = .95, verbose = F, count.lim = 3), #0.017
+                            alpha = 0.03, percentile = .95, verbose = F, count.lim = 3), 
                      deGate(ff_t[subset,], m,
                             tinypeak.removal = 0.2, upper = TRUE, use.upper = TRUE,
                             alpha = alpha, percentile = .95, verbose = F, count.lim = 3)) 
@@ -908,13 +986,13 @@ gate <- function(fcs_files, cd45_ch = "Pr141Di", viability_ch = "Pt195Di",
     
     for(m in c(v_ch, "Ir191Di")){
       if (m == v_ch) {
-        selection[ff_t@exprs[,m] > tr[[m]][1], "life"] <- FALSE 
+        selection[ff_t@exprs[,m] > tr[[m]][1], "live"] <- FALSE 
       } else {
-        selection[ff_t@exprs[,m] < tr[[m]][1], "life"] <- FALSE
-        selection[ff_t@exprs[,m] > tr[[m]][2], "life"] <- FALSE  
+        selection[ff_t@exprs[,m] < tr[[m]][1], "live"] <- FALSE
+        selection[ff_t@exprs[,m] > tr[[m]][2], "live"] <- FALSE  
       }
     }
-    percentage <- (sum(selection[,"life"]/sum(subset)))*100  
+    percentage <- (sum(selection[,"live"]/sum(subset)))*100  
     plotDens(ff_t[subset,], c(v_ch, "Ir191Di"), 
              main = paste0(file," ( ", format(round(percentage, 2), nsmall = 2), "% )"),
              xlim = c(0, 8), ylim = c(0, 8))
@@ -922,46 +1000,24 @@ gate <- function(fcs_files, cd45_ch = "Pr141Di", viability_ch = "Pt195Di",
     abline(h = tr[["Ir191Di"]])
     abline(v = tr[[v_ch]])
     
-    points(ff_t@exprs[subset & !selection[,"life"], c(v_ch, "Ir191Di")], pch = ".") 
+    points(ff_t@exprs[subset & !selection[,"live"], c(v_ch, "Ir191Di")], pch = ".") 
     
-    # subset <- selection[, "life"]
-    # selection[, "cd45"] <- subset
-    # 
-    # m <- grep(cd45_ch, colnames(ff), value = T)
-    # 
-    # tr <- deGate(ff_t[subset,], m,
-    #              tinypeak.removal = 0.1, upper = FALSE, use.upper = TRUE,
-    #              alpha = 0.05, percentile = .95, verbose = F, count.lim = 3)
-    # 
-    # if (tr < 1.7) {
-    #   tr <- 1.7
-    # }
-    
-    # selection[ff_t@exprs[,m] < tr[1], "cd45"] <- FALSE 
-    # percentage <- (sum(selection[,"cd45"]/sum(subset)))*100
-    # plotDens(ff_t[subset,], c("Ir191Di", m), 
-    #          main = paste0(file," ( ", format(round(percentage, 2), nsmall = 2), "% )"), 
-    #          xlim = c(0, 8), 
-    #          ylim = c(0, 8))
-    # abline(h = tr)
-    # points(ff_t@exprs[subset & !selection[,"cd45"], c("Ir191Di", m)], pch = ".")
-    
-    write.FCS(ff[selection[,"life"], ],
+    write.FCS(ff[selection[,"live"], ],
               file.path(out_dir,
-                        gsub(".fcs", "_gated.fcs", file)))
+                        gsub(".fcs", "_gated.fcs", basename(file))))
     
     saveRDS(selection,
             file.path(out_dir,
-                      gsub(".fcs", "_gatingMatrix.RDS", file)))
+                      gsub(".fcs", "_gatingMatrix.RDS", basename(file))))
     
   }
   dev.off()
 }
 
-#TODO put option for trsanforming or not 
 plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(), 
                        clustering_markers = "CD|HLA|IgD|PD|BAFF|TCR", 
                        functional_markers = NULL, 
+                       arcsine_transform = TRUE,
                        batch_pattern = "RUN[0-9]*"){
   
   # ff_agg  <- file.path(fSOM_dir, paste0("norm_REF_aggregated_", p, ".fcs"))
@@ -984,9 +1040,11 @@ plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(),
                                   outputFile = file.path(out_dir, paste0("norm_REF_aggregated_", ".fcs")))
     # }
     
-    ff_agg <- transform(ff_agg,
-                        transformList(grep("Di", colnames(ff_agg), value = TRUE), 
-                                      cytofTransform))
+    if (arcsine_transform == TRUE){
+      ff_agg <- transform(ff_agg,
+                          transformList(grep("Di", colnames(ff_agg), value = TRUE), 
+                                        cytofTransform))
+    }
     
     markers <- get_markers(ff_agg, colnames(ff_agg))
     
@@ -1003,8 +1061,6 @@ plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(),
     samp <- length(files_list[[name]])
     ff_samp <- ff_agg@exprs[sample(nrow(ff_agg@exprs), samp*500), ]
     
-    
-    #TODO use the ce of nocicka do show mds or umap but by sample ypu have a code in TODO doc in google
     set.seed(123)
     dimred_res <- uwot::umap(X = ff_samp[, names(cl_markers)], 
                              n_neighbors = 15, scale = TRUE)
@@ -1023,13 +1079,23 @@ plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(),
     }
     
     p <- ggplot(dimred_df,  aes_string(x = "dim1", y = "dim2", color = "batch")) +
-      geom_point(aes(color = batch), size = 0.8, position="jitter") +
-      theme_bw() +
+      geom_point(aes(color = batch), size = 2, position="jitter") +
       ggtitle(name)+
-      # scale_color_manual(values=col )+
-      # scale_color_gradientn(norm_markers[m], 
-      #                       colours = colorRampPalette(rev(brewer.pal(n = 11, name = "Spectral")))(50))+
-      theme(legend.position = "bottom")
+      guides(color = guide_legend(override.aes = list(size = 5)))+
+      theme(panel.background = element_rect(fill = "white", colour = "black",
+                                            size = 2, linetype = "solid"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            plot.subtitle = element_text(color="black", size=26, hjust = 0.95, face = "bold"),
+            axis.text = element_text(size = 24, colour = "black"),
+            axis.title = element_text(size = 20, colour = "black"), 
+            strip.text.x = element_text(size = 23, color = "black"),
+            strip.background = element_rect(fill = "white"), 
+            legend.text = element_text(size = 18), 
+            legend.title = element_text(size = 22),
+            legend.position = "bottom", 
+            # legend.key.size = unit(3,"point"),
+            legend.key = element_blank()) 
     
     p 
     plots[[name]] <- p
@@ -1046,7 +1112,9 @@ plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(),
     # }
   }
   
-  pdf(file.path(norm_dir, "batch_effect"), width = length(plots)*6, height = 6)
+  svg(file.path(norm_dir, "batch_effect.svg"), 
+      width = length(plots)*6, 
+      height = 6)
   gridExtra::grid.arrange(grobs = plots, ncol = 2)
   dev.off()
   
@@ -1147,6 +1215,103 @@ plot_aggregate <- function(names = NULL,
            col = colors, cex = 3)
   }
   dev.off()
+}
+
+
+UMAP <- function(fcs_files, clustering_markers = c("CD", "HLA", "IgD"),
+                 functional_markers = c("IL", "TNF", "TGF", "Gr", "IF"),
+                 out_dir = getwd(), batch_pattern = "day[0-9]*", 
+                 arcsine_transform = TRUE){
+  
+  set.seed(1)
+  ff_agg <- AggregateFlowFrames(fileNames = fcs_files,
+                                cTotal = length(fcs_files) * 1000,
+                                verbose = TRUE,
+                                writeMeta = TRUE,
+                                writeOutput = TRUE,
+                                outputFile = file.path(out_dir, paste0("norm_REF_aggregated_", ".fcs")))
+  
+  if (arcsine_transform == TRUE){
+    ff_agg <- transform(ff_agg,
+                        transformList(grep("Di", colnames(ff_agg), value = TRUE), 
+                                      cytofTransform))
+  }
+  
+  markers <- get_markers(ff_agg, colnames(ff_agg))
+  
+  cl_markers <- paste(clustering_markers, collapse="|")
+  cl_markers <- grep(cl_markers, markers, value = T)
+  
+  ff_agg@exprs[, names(cl_markers)] <- apply(ff_agg@exprs[, names(cl_markers)], 2, function(x){
+    q <- quantile(x, 0.9999)
+    x[x > q] <- q
+    x
+  })
+  
+  samp <- length(fcs_files)
+  
+  set.seed(1)
+  ff_samp <- ff_agg@exprs[sample(nrow(ff_agg@exprs), samp*1000), ]
+  
+  set.seed(123)
+  dimred_res <- uwot::umap(X = ff_samp[, names(cl_markers)], 
+                           n_neighbors = 15, scale = TRUE)
+  
+  if (!is.null(functional_markers)){
+    f_markers <- paste(functional_markers, collapse="|")
+    f_markers <- grep(f_markers, markers, value = T)
+    all_markers <- c(cl_markers, f_markers)
+  } else {
+    all_markers <- cl_markers
+  }
+  
+  df <- data.frame(dim1 = dimred_res[,1], dim2= dimred_res[,2],
+                   ff_samp[, names(all_markers)])
+  
+  colnames(df)[3:ncol(df)] <- gsub("_|-", "", 
+                                   sub("^[0-9]*[A-Za-z]*|^[0-9]*[A-Za-z]*_","", 
+                                       all_markers))
+  
+  df$file_id <- ff_samp[,"File2"]
+  df$batch <- NA
+  df$sample_name <- NA
+  # dimred_df$indyvidual<- NA
+  # dimred_df$stimulation <- NA
+  
+  for (i in 1:length(fcs_files)){
+    
+    file <- fcs_files[i]
+    batch <- stringr::str_match(file, batch_pattern)[,1]
+    df[df[, "file_id"] == i, "batch"] <- batch
+    sample_id <- gsub(".fcs|_gated.fcs|_CC_gated.fcs","", basename(file))
+    df[df[, "file_id"] == i, "sample_name"] <- sample_id
+    # if (!is.null(indyvidual_pattern)){
+    #   id <- paste(indyvidual_pattern, collapse="|")
+    #   ids <- stringr::str_match(file, id)[,1]
+    #   dimred_df[dimred_df[, "file_id"] == i, "indyvidual"] <- ids
+    # }
+    # if (!is.null(stimulation_pattern)){
+    #   stim <- paste(stimulation_pattern, collapse="|")
+    #   stims <- stringr::str_match(file, stim)[,1]
+    #   dimred_df[dimred_df[, "file_id"] == i, "stimulation"] <- stims
+    # }
+    
+  }
+  # 
+  # p <- ggplot(dimred_df,  aes_string(x = "dim1", y = "dim2")) +
+  #   geom_point(aes(color = batch), size = 0.8, position="jitter") +
+  #   theme_bw() +
+  #   # ggtitle()+
+  #   # scale_color_manual(values=col )+
+  #   scale_color_gradientn("Eu151Di", 
+  #                          colours = grDevices::colorRampPalette(rev(brewer.pal(n = 11, name = "Spectral")))(50))+
+  #   theme(legend.position = "bottom")
+  # 
+  # p 
+  # 
+  
+  return(df)
+  
 }
 
 
