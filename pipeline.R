@@ -4,7 +4,6 @@
 source('~/Documents/CyTOF_workflow/CytofPipeline1/instalation.R')
 source('~/Documents/CyTOF_workflow/CytofPipeline1/functions.R')
 
-
 # set working directory
 dir <- "/home/paulina/Documents/CyTOF_workflow/data_cyt"
 setwd(dir)
@@ -44,7 +43,7 @@ for (file in files){
   ff <- read.FCS(file, transformation = FALSE, truncate_max_range = FALSE)
   
   # bead normalize the files
-  ff_norm <- bead_normalize(flow_frame = ff, keep_all_markers = FALSE, 
+  ff_norm <- bead_normalize(flow_frame = ff, 
                             out_dir = bead_norm_dir, norm_to_ref = ref_sample, 
                             to_plot = TRUE, k = 80,
                             markers_to_keep = c("CD", "HLA", "IgD", "TCR", "Ir", 
@@ -76,7 +75,6 @@ files_a <- list.files(file.path(bead_norm_dir), pattern = "_beadNorm.fcs$",
 
 # Define batch id and sample id for each file
 batch_pattern <- str_match(basename(files_b), ".*(day[0-9]*).*.FCS")[,2]
-# file_id <- str_match(basename(files_b), ".*day[0-9]*_[0-9]*.*.FCS$")[,2]
 
 plot_marker_quantiles(files_after_norm = files_a, files_before_norm = files_b, 
                       batch_pattern = batch_pattern, arcsine_transform = TRUE,
@@ -140,6 +138,9 @@ file_batch_id <- stringr::str_match(basename(files),
 # Define out_dir for diagnostic plots
 quality_dir <- file.path(dir, "Quality_control")
 
+
+#ToDO adapt code to the new function
+
 file_quality_check(fcs_files = files, file_batch_id = file_batch_id, 
                    out_dir = quality_dir,
                    phenotyping_markers = c("Ir","CD", "HLA", "IgD", "Pt"), 
@@ -175,6 +176,9 @@ file_batch_id <- stringr::str_match(basename(fcs_files_clean),
 # Read in meta data 
 md <- read.csv(file.path(dir, "meta_data.csv"))
 
+# read in barcode key 
+sample_key <- CATALYST::sample_key
+
 # Extract information about barcodes used in each batch
 barcodes_list <- list()
 for (batch in unique(file_batch_id)){
@@ -191,7 +195,7 @@ for (batch in unique(file_batch_id)){
 debarcode_files(fcs_files = fcs_files_clean, 
                 out_dir = debarcode_dir, min_threshold = TRUE, 
                 barcodes_used = barcodes_list, file_batch_id = file_batch_id, 
-                less_than_th = TRUE)
+                less_than_th = TRUE, barcode_key = sample_key)
 
 # ------------------------------------------------------------------------------
 # Files aggregation ------------------------------------------------------------
@@ -245,7 +249,7 @@ cytofclean::cytofclean_GUI()
 cytof_clean_dir <- file.path(dir, "Aggregated", "CyTOFClean")
 
 # Set output directory 
-gate_dir <- file.path(dir, "Gated")
+out_dir <- file.path(dir, "Gated")
 if (!dir.exists(gate_dir)) { 
   dir.create(gate_dir)
 }
@@ -253,10 +257,27 @@ if (!dir.exists(gate_dir)) {
 # List files for gating 
 files <- list.files(cytof_clean_dir, pattern = ".fcs$", full.names = TRUE)
 
-#TODO remove all the CD45 gating
-# Gate the files
-gate(fcs_files = files, viability_ch = "Pt195Di",
-     out_dir = gate_dir)
+# Gate the files and plot the gating strategy for each file 
+n_plots <- 2  
+png(file.path(gate_dir,
+              paste0("gating.png")),
+    width = n_plots * 300, height = length(files) * 300)
+layout(matrix(1:(length(files) * n_plots), ncol = n_plots, byrow = TRUE))
+
+for (file in files){
+  
+  ff <- read.FCS(file, transformation = FALSE)
+  
+  ff <- gate_intact_cells(flow_frame = ff, file_name = NULL)
+  ff <- gate_live_cells(flow_frame = ff, viability_channel = "Pt195Di",
+                        out_dir = gate_dir)
+  
+  write.FCS(ff, file.path(out_dir,
+                      gsub(".fcs", "_gated.fcs", basename(file))))
+}
+
+dev.off()
+
 
 # ------------------------------------------------------------------------------
 # Normalization using reference sample -----------------------------------------
@@ -342,9 +363,8 @@ plot_batch(files_before_norm = files_before_norm,
            clustering_markers = c("CD", "IgD", "HLA"),
            functional_markers = c("IL", "Gran", "TNF", "TGF", "MIP", "MCP"))
 
-
 # ------------------------------------------------------------------------------
-# Runa UMAP y map manual labels ------------------------------------------------
+# Run UMAP ---------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 
 # Set input directory 
@@ -362,7 +382,7 @@ batch_pattern <- str_match(basename(files), ".*(day[0-9]*).*.fcs")[,2]
 
 # Build UMAP on aggregated files
 UMAP <- UMAP(fcs_files = files, clustering_markers = c("CD", "HLA", "IgD"),
-             functional_markers = c("IL", "TNF", "TGF", "Gr", "IF"),
+             functional_markers = c("IL", "TNF", "TGF", "Gr", "IF", "MIP", "MCP1"),
              out_dir = analysis_dir, batch_pattern = "day[0-9]*", 
              arcsine_transform = TRUE)
 
@@ -382,19 +402,20 @@ df <- df %>% filter(sample_name == grep("RSQ", df[,"sample_name"],
                                         value = TRUE))
 
 # select markers to plot 
-functional_markers <- grep("IFNa|TNF|IL10",
+markers_to_plot <- grep("CD|HLA|IgD",
                            colnames(df), value = TRUE)
+
 
 # create a list to store the singel plots
 plots <- list()
 
 # plot the map for each markers
-for(m in functional_markers){
+for(m in markers_to_plot){
  
   p <- ggplot(df,  aes_string(x = "dim1", y = "dim2", color = m)) +
-    geom_point(size = 2) +
+    geom_point(size = 4) +
     facet_wrap("indyvidual") +
-    scale_color_gradientn(functional_markers[functional_markers == m], 
+    scale_color_gradientn(markers_to_plot[markers_to_plot == m], 
                           colours = colorRampPalette(rev(brewer.pal(n = 11, name = "Spectral")))(50))  +
     theme(panel.background = element_rect(fill = "white", colour = "black",
                                           size = 2, linetype = "solid"),
@@ -407,11 +428,12 @@ for(m in functional_markers){
           strip.background = element_rect(fill = "white"), 
           legend.text = element_text(size = 14), 
           legend.title = element_text(size = 20),
-          legend.position = "bottom") 
+          legend.position = "right") 
   
   plots[[m]] <- p
 }
 
-ggarrange(plotlist = plots, ncol=length(functional_markers), nrow = 1)
-ggarrange(plotlist = plots, ncol=length(functional_markers), nrow = 3)
+# plot the plots
+# ggarrange(plotlist = plots, nrow=length(markers_to_plot), ncol= 1)
+ggarrange(plotlist = plots, ncol = 3, nrow = 8)
 

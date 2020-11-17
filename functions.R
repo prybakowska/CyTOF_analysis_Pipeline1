@@ -79,12 +79,21 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
 #' @param non_used_bead_ch Character vector, bead channels that does not contain 
 #' any marker information, thus do not need to be cleaned andused for further analysis
 #' @param ... Additional arguments to pass to flowcut.
+#' @param MaxPercCut As in flowCut, numeric between 0-1 the maximum percentage of 
+#' event tha will be removed form the data. 
+#' @param UseOnlyWorstChannels as in flowCut, logical, automated detection of the 
+#' worst channel that will be used for cleaninig 
+#' @param AllowFlaggedRerun as in flowCut, logical, specigy if flowCut will run
+# second time in case the file was flagged
 #' @return Cleaned, untransformed flow frame if arcsine_transform argument
 #'  set to TRUE, otherwise transformed flow frame is returned
 
 clean_signal <- function(flow_frame, channels_to_clean = NULL, to_plot = "All", 
                          out_dir = getwd(), arcsine_transform = TRUE, 
-                         non_used_bead_ch = NULL, ...){
+                         non_used_bead_ch = NULL, MaxPercCut = 0.5,
+                         UseOnlyWorstChannels = TRUE,
+                         AllowFlaggedRerun = TRUE,
+                         ...){
   
   channels_to_transform <- find_mass_ch(flow_frame, value = FALSE)
   
@@ -129,14 +138,14 @@ clean_signal <- function(flow_frame, channels_to_clean = NULL, to_plot = "All",
   
   cleaned_data <- flowCut(ff_t, 
                           Segment = 1000, 
-                          MaxPercCut = 0.5, 
+                          MaxPercCut = MaxPercCut, 
                           Channels = channels,
                           FileID = gsub("_beadNorm", "_flowCutCleaned", 
                                         basename(flow_frame@description$FILENAME)),
                           Plot = to_plot,
                           Directory = out_dir,
-                          UseOnlyWorstChannels = TRUE,
-                          AllowFlaggedRerun = TRUE,
+                          UseOnlyWorstChannels = UseOnlyWorstChannels,
+                          AllowFlaggedRerun = AllowFlaggedRerun,
                           AlwaysClean = TRUE, ...)
   
   ff_t_clean <- cleaned_data$frame
@@ -157,7 +166,7 @@ clean_signal <- function(flow_frame, channels_to_clean = NULL, to_plot = "All",
 #' @param fcs_files Path to fcs files to be normalized
 #' @param beads The same as in normCytof from CATALYAST package, character variable:
 #'"dvs" (for bead masses 140, 151, 153 ,165, 175) or 
-#'"beta" (for bead masses 139, 141, 159, 169, 175) or a numeric vector of masses.
+#'"beta" (for bead masses 139, 141, 159, 169, 175)
 #' @param to_plot Logicle variable that indicates if plots should be genarated, 
 #' default set to FALSE
 #' @param out_dir Character, pathway to where the plots should be saved, 
@@ -169,7 +178,7 @@ clean_signal <- function(flow_frame, channels_to_clean = NULL, to_plot = "All",
 #' default is set to 25000, so around 250 beads can be aggregated per each file 
 #' @return returns reference flow frame 
 
-create_ref <- function(fcs_files, beads = NULL, to_plot = FALSE, 
+create_ref <- function(fcs_files, beads = "dvs", to_plot = FALSE, 
                        out_dir = getw(), k = 80, ncells = 25000, ...){
   # TODO ASKSOFIE if she could change the function so that only selected channels are in the aggregated files
   ff <- AggregateFlowFrames(fileNames = fcs_files, cTotal = length(fcs_files)*ncells)
@@ -214,6 +223,13 @@ create_ref <- function(fcs_files, beads = NULL, to_plot = FALSE,
 #' barcoding channels are kept
 #' If NULL (default) all markers will be normalized and kept in flowframe, 
 #' selection of the markers will reduce file volume and speedup the analysis. 
+#' @param beads character, as in normCytof, "dvs" (for bead masses 140, 151, 153 ,165, 175) 
+#' or "beta" (for bead masses 139, 141, 159, 169, 175) or a numeric vector of masses. 
+#' Default is set to "dvs"
+#' @param norm_to_ref flow frame, created by create_ref function to which input data 
+#' will be normalized, default is set to NULL
+#' @param remove_beads, logicle, if beads should be removed after the normalization, 
+#' default is set to TRUE
 #' @param to_plot Logical if to plot bead gate and bead normalization lines for each 
 #' file.
 #' @param out_dir Character, pathway to where the plots should be saved, 
@@ -299,7 +315,7 @@ bead_normalize <- function(flow_frame,
 #' @description Calculates quantiles for selected markers and plots them as 
 #' diagnostic plot 
 #' @param files_before_norm Character, full path to the unnormalized fcs_files.
-#' @param files_after_norm Character, full path to the unnormalized fcs_files.
+#' @param files_after_norm Character, full path to the normalized fcs_files.
 #' @param batch_pattern Character, bach pattern to be match in the fcs file name
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5.
@@ -339,7 +355,7 @@ plot_marker_quantiles <- function(files_before_norm,
       norm_markers <- grep(matches,
                            get_markers(ff_tmp, find_mass_ch(ff_tmp, 
                                                             value = TRUE)), 
-                           value = TRUE)
+                           value = TRUE, ignore.case = T)
     } else {
       norm_markers <- find_mass_ch(ff_tmp, value = TRUE)
       norm_markers <- get_markers(ff_tmp, norm_markers)
@@ -382,6 +398,7 @@ plot_marker_quantiles <- function(files_before_norm,
     }
   }
  
+  #TODO how to do it automaticly so it removes letter just before the fcs
   quantiles$Sample <- gsub("Norm_", "", 
                            gsub("_CC_gated.fcs|_gated.fcs|_gated.fcs|_beadNorm.fcs|.FCS",
                                 "", basename(as.character(quantiles$File))))
@@ -672,7 +689,7 @@ file_outlier_detecion <- function(scores, out_dir = getwd(), sd) {
 #' detection, default = 3.
 
 file_quality_check <- function(fcs_files, file_batch_id = NULL, 
-                               out_dir, phenotyping_markers = NULL, 
+                               out_dir = getwd(), phenotyping_markers = NULL, 
                                arcsine_transform = TRUE, sd = 3){
   
   if(!dir.exists(out_dir)) dir.create(out_dir)
@@ -718,13 +735,19 @@ file_quality_check <- function(fcs_files, file_batch_id = NULL,
 #' from CATALYST package will be used 
 #' @param less_than_th logicle, if file names for which debarcoding threshold lower than
 #' 0.18 should be saved in out_dir, default FALSE
+#' @param barcode_key matrix as in CATALYST::assignPrelim, the debarcoding scheme. 
+#' A binary matrix with sample names as row names and numeric masses as column names 
+#' OR a vector of numeric masses corresponding to barcode channels. 
+#' When the latter is supplied, 'assignPrelim' will create a scheme of the
+#' appropriate format internally.
 
 debarcode_files <- function(fcs_files, 
                             file_batch_id,
                             out_dir = getwd(), 
                             min_threshold = TRUE, 
                             barcodes_used = NULL, 
-                            less_than_th = FALSE){
+                            less_than_th = FALSE, 
+                            barcode_key = NULL){
   
   if(anyDuplicated(fcs_files) != 0){
     stop("names of fcs files are duplicated")
@@ -741,19 +764,18 @@ debarcode_files <- function(fcs_files,
     if(!dir.exists(out_dir)) dir.create(out_dir)
     
     if(!is.null(barcodes_used)){
-      # s_key <- sample_key[rownames(sample_key) %in% barcodes_used,]
       if(is.list(barcodes_used)){
-        s_key <- sample_key[rownames(sample_key) %in% barcodes_list[[batch_id]],]
+        s_key <- barcode_key[rownames(barcode_key) %in% barcodes_list[[batch_id]],]
       } else {
-        s_key <- sample_key[rownames(sample_key) %in% barcodes_used,]
+        s_key <- barcode_key[rownames(barcode_key) %in% barcodes_used,]
       }
       
     } else {
-      s_key <- sample_key
+      s_key <- barcode_key
     }
 
     dat <- prepData(ff)
-    dat <- assignPrelim(dat, s_key)
+    dat <- assignPrelim(dat, bc_key = s_key)
     rownames(dat)[rowData(dat)$is_bc]
     # table(colData(dat)$bc_id)
     dat <- estCutoffs(dat)
@@ -829,7 +851,8 @@ debarcode_files <- function(fcs_files,
 #TODO check fr_append column to describe what is channels_to_keep
 aggregate_files <- function(fcs_files, 
                             channels_to_keep = NULL,
-                            outputFile = "aggregate.fcs", maxcells = NULL, 
+                            outputFile = "aggregate.fcs", 
+                            maxcells = NULL, 
                             write_agg_file = FALSE){
   
   nFiles <- length(fcs_files)
@@ -892,138 +915,322 @@ aggregate_files <- function(fcs_files,
   return(flowFrame)
 }
 
-#' @description Performs gating using flowDensity package to obtain intact and 
-#' live cells, creates pdf plots with gating strategy used. 
-#' @param fcs_files Character, full path to fcs_files.
-#' @param viability_channel Character, channel used for viability staining
-#' @param out_dir Character, pathway to where the plot and gated fcs files 
-#' should be stored, defaults set to getwd()
-#' @param arcsine_transform arcsine_transform Logical, if the data should be transformed with 
-#' arcsine transformation and cofactor 5.
-# TODO check read ff because it should be without cyfoclean_dir
+#' #' @description Performs gating using flowDensity package to obtain intact and 
+#' #' live cells, creates pdf plots with gating strategy used. 
+#' #' @param fcs_files Character, full path to fcs_files.
+#' #' @param viability_channel Character, channel used for viability staining
+#' #' @param out_dir Character, pathway to where the plot and gated fcs files 
+#' #' should be stored, defaults set to getwd()
+#' #' @param arcsine_transform arcsine_transform Logical, if the data should be transformed with 
+#' #' arcsine transformation and cofactor 5.
+#' # TODO check read ff because it should be without cyfoclean_dir
+#' 
+#' gate <- function(fcs_files, viability_channel = "Pt195Di",
+#'                  out_dir = getwd(), arcsine_transform = TRUE) {
+#'   
+#'   n_plots <- 2  
+#'   png(file.path(gate_dir,
+#'                 paste0("gating.png")),
+#'       width = n_plots * 300, height = length(files) * 300)
+#'   layout(matrix(1:(length(fcs_files) * n_plots), ncol = n_plots, byrow = TRUE))
+#'   
+#'   for(file in fcs_files){
+#'     
+#'     print(paste0("Preprocessing ", file))
+#'     print(Sys.time())
+#'     
+#'     ff <- read.FCS(file, transformation = FALSE)
+#'     
+#'     if(arcsine_transform == TRUE){
+#'       
+#'       ff_t <- transform(ff, 
+#'                       transformList(colnames(ff)[grep("Di", colnames(ff))], 
+#'                                     CytoNorm::cytofTransform))
+#'     } else {
+#'       ff_t <- ff
+#'     }
+#'     
+#'     selection <- matrix(TRUE,
+#'                         nrow = nrow(ff),
+#'                         ncol = 2,
+#'                         dimnames = list(NULL,
+#'                                         c("intact", 
+#'                                           "live")))
+#'     
+#'     tr <- list()
+#'     for(m in c("Ir193Di", "Ir191Di")){
+#'       
+#'       tr[[m]] <- c(deGate(ff_t, m,
+#'                           tinypeak.removal = 0.8, upper = FALSE, use.upper = TRUE,
+#'                           alpha = 0.05, verbose = F, count.lim = 3), 
+#'                    deGate(ff_t, m,
+#'                           tinypeak.removal = 0.8, upper = TRUE, use.upper = TRUE,
+#'                           alpha = 0.1, percentile = .95, verbose = F, count.lim = 3)) 
+#'     }
+#'     
+#'     for(m in c("Ir193Di", "Ir191Di")){
+#'       selection[ff_t@exprs[,m] < tr[[m]][1], "intact"] <- FALSE
+#'       selection[ff_t@exprs[,m] > tr[[m]][2], "intact"] <- FALSE
+#'     }
+#'     
+#'     percentage <- (sum(selection)/length(selection))*100
+#'     plotDens(ff_t, c("Ir193Di", "Ir191Di"), 
+#'              main = paste0(file," ( ", format(round(percentage, 2), nsmall = 2), "% )"))
+#'     
+#'     abline(h = c(tr[["Ir191Di"]]))
+#'     abline(v = c(tr[["Ir193Di"]]))
+#'     points(ff_t@exprs[!selection[,"intact"], c("Ir193Di", "Ir191Di")], pch = ".")
+#'     
+#'     subset <- selection[, "intact"]
+#'     selection[, "live"] <- subset
+#'     
+#'     v_ch <- grep(viability_channel, colnames(ff), value = T)
+#'     
+#'     tr <- list()
+#'     for(m in c("Ir191Di", v_ch)){
+#'       if (m == v_ch) {
+#'         upper = TRUE
+#'         alpha = 0.1
+#'         tr[[m]] <- deGate(ff_t[subset,], m,
+#'                           tinypeak.removal = 0.8, upper = upper, use.upper = TRUE,
+#'                           alpha = alpha, percentile = .80, verbose = F, count.lim = 3)
+#'         
+#'       } else {
+#'         alpha = 0.05
+#'         tr[[m]] <- c(deGate(ff_t[subset,], m,
+#'                             tinypeak.removal = 0.2, upper = FALSE, use.upper = TRUE,
+#'                             alpha = 0.03, percentile = .95, verbose = F, count.lim = 3), 
+#'                      deGate(ff_t[subset,], m,
+#'                             tinypeak.removal = 0.2, upper = TRUE, use.upper = TRUE,
+#'                             alpha = alpha, percentile = .95, verbose = F, count.lim = 3)) 
+#'         
+#'       }
+#'     }
+#'     
+#'     for(m in c(v_ch, "Ir191Di")){
+#'       if (m == v_ch) {
+#'         selection[ff_t@exprs[,m] > tr[[m]][1], "live"] <- FALSE 
+#'       } else {
+#'         selection[ff_t@exprs[,m] < tr[[m]][1], "live"] <- FALSE
+#'         selection[ff_t@exprs[,m] > tr[[m]][2], "live"] <- FALSE  
+#'       }
+#'     }
+#'     percentage <- (sum(selection[,"live"]/sum(subset)))*100  
+#'     plotDens(ff_t[subset,], c(v_ch, "Ir191Di"), 
+#'              main = paste0(file," ( ", format(round(percentage, 2), nsmall = 2), "% )"),
+#'              xlim = c(0, 8), ylim = c(0, 8))
+#'     
+#'     abline(h = tr[["Ir191Di"]])
+#'     abline(v = tr[[v_ch]])
+#'     
+#'     points(ff_t@exprs[subset & !selection[,"live"], c(v_ch, "Ir191Di")], pch = ".") 
+#'     
+#'     write.FCS(ff[selection[,"live"], ],
+#'               file.path(out_dir,
+#'                         gsub(".fcs", "_gated.fcs", basename(file))))
+#'     
+#'     saveRDS(selection,
+#'             file.path(out_dir,
+#'                       gsub(".fcs", "_gatingMatrix.RDS", basename(file))))
+#'     
+#'   }
+#'   dev.off()
+#' }
 
-gate <- function(fcs_files, viability_channel = "Pt195Di",
-                 out_dir = getwd(), arcsine_transform = TRUE) {
+#' @description Performs gating of intact cells using flowDensity package
+#' @param flow_frame Character, full path to fcs_file.
+#' @param file_name Character, the file name used only for plotting, if NULL
+#' the file name stored in keyword GUID.original will be used, default is set to NULL
+#' @param tinypeak_removal1, numeric from 0-1, as in deGate to exclude/include 
+#' tiny peaks in the head of the density ditribution curve for both Iridium 
+#' channels
+#' @param tinypeak_removal2 the same as tinypeak_removal1 but for the tail 
+#' in the density ditribution curve
+#' @param alpha1 numeric, 0-1, as in deGate specify the significance of change 
+#' in the slope being detected at the head of the density ditribution curve
+#' @param alpha2 the same as in alpha1 but for the head of the density ditribution curve
+#' @param arcsine_transform Logical, if the data should be transformed with 
+#' arcsine transformation and cofactor 5.
+
+gate_intact_cells <- function(flow_frame, 
+                              file_name = NULL,
+                              tinypeak_removal1 = 0.8,
+                              tinypeak_removal2 = 0.8,
+                              alpha1 = 0.05,
+                              alpha2 = 0.1, 
+                              arcsine_transform = TRUE, ...){
   
-  n_plots <- 2  
-  png(file.path(gate_dir,
-                paste0("gating.png")),
-      width = n_plots * 300, height = length(files) * 300)
-  layout(matrix(1:(length(fcs_files) * n_plots), ncol = n_plots, byrow = TRUE))
+  ff <- flow_frame
   
-  for(file in fcs_files){
+  if (is.null(file_name)){
+    file_name <- ff@description$GUID.original
+  } else {
+    file_name 
+  }
+  
+  if(arcsine_transform == TRUE){
     
-    print(paste0("Preprocessing ", file))
-    print(Sys.time())
-    
-    ff <- read.FCS(file, transformation = FALSE)
-    
-    if(arcsine_transform == TRUE){
-      
-      ff_t <- transform(ff, 
+    ff_t <- transform(ff, 
                       transformList(colnames(ff)[grep("Di", colnames(ff))], 
                                     CytoNorm::cytofTransform))
-    } else {
-      ff_t <- ff
-    }
-    
-    selection <- matrix(TRUE,
-                        nrow = nrow(ff),
-                        ncol = 2,
-                        dimnames = list(NULL,
-                                        c("intact", 
-                                          "live")))
-    
-    tr <- list()
-    for(m in c("Ir193Di", "Ir191Di")){
-      
-      tr[[m]] <- c(deGate(ff_t, m,
-                          tinypeak.removal = 0.8, upper = FALSE, use.upper = TRUE,
-                          alpha = 0.05, verbose = F, count.lim = 3), 
-                   deGate(ff_t, m,
-                          tinypeak.removal = 0.8, upper = TRUE, use.upper = TRUE,
-                          alpha = 0.1, percentile = .95, verbose = F, count.lim = 3)) 
-    }
-    
-    for(m in c("Ir193Di", "Ir191Di")){
-      selection[ff_t@exprs[,m] < tr[[m]][1], "intact"] <- FALSE
-      selection[ff_t@exprs[,m] > tr[[m]][2], "intact"] <- FALSE
-    }
-    
-    percentage <- (sum(selection)/length(selection))*100
-    plotDens(ff_t, c("Ir193Di", "Ir191Di"), 
-             main = paste0(file," ( ", format(round(percentage, 2), nsmall = 2), "% )"))
-    
-    abline(h = c(tr[["Ir191Di"]]))
-    abline(v = c(tr[["Ir193Di"]]))
-    points(ff_t@exprs[!selection[,"intact"], c("Ir193Di", "Ir191Di")], pch = ".")
-    
-    subset <- selection[, "intact"]
-    selection[, "live"] <- subset
-    
-    v_ch <- grep(viability_channel, colnames(ff), value = T)
-    
-    tr <- list()
-    for(m in c("Ir191Di", v_ch)){
-      if (m == v_ch) {
-        upper = TRUE
-        alpha = 0.1
-        tr[[m]] <- deGate(ff_t[subset,], m,
-                          tinypeak.removal = 0.8, upper = upper, use.upper = TRUE,
-                          alpha = alpha, percentile = .80, verbose = F, count.lim = 3)
-        
-      } else {
-        alpha = 0.05
-        tr[[m]] <- c(deGate(ff_t[subset,], m,
-                            tinypeak.removal = 0.2, upper = FALSE, use.upper = TRUE,
-                            alpha = 0.03, percentile = .95, verbose = F, count.lim = 3), 
-                     deGate(ff_t[subset,], m,
-                            tinypeak.removal = 0.2, upper = TRUE, use.upper = TRUE,
-                            alpha = alpha, percentile = .95, verbose = F, count.lim = 3)) 
-        
-      }
-    }
-    
-    for(m in c(v_ch, "Ir191Di")){
-      if (m == v_ch) {
-        selection[ff_t@exprs[,m] > tr[[m]][1], "live"] <- FALSE 
-      } else {
-        selection[ff_t@exprs[,m] < tr[[m]][1], "live"] <- FALSE
-        selection[ff_t@exprs[,m] > tr[[m]][2], "live"] <- FALSE  
-      }
-    }
-    percentage <- (sum(selection[,"live"]/sum(subset)))*100  
-    plotDens(ff_t[subset,], c(v_ch, "Ir191Di"), 
-             main = paste0(file," ( ", format(round(percentage, 2), nsmall = 2), "% )"),
-             xlim = c(0, 8), ylim = c(0, 8))
-    
-    abline(h = tr[["Ir191Di"]])
-    abline(v = tr[[v_ch]])
-    
-    points(ff_t@exprs[subset & !selection[,"live"], c(v_ch, "Ir191Di")], pch = ".") 
-    
-    write.FCS(ff[selection[,"live"], ],
-              file.path(out_dir,
-                        gsub(".fcs", "_gated.fcs", basename(file))))
-    
-    saveRDS(selection,
-            file.path(out_dir,
-                      gsub(".fcs", "_gatingMatrix.RDS", basename(file))))
-    
+  } else {
+    ff_t <- ff
   }
-  dev.off()
+  
+  selection <- matrix(TRUE,
+                      nrow = nrow(ff),
+                      ncol = 1,
+                      dimnames = list(NULL,
+                                      c("intact")))
+  
+  tr <- list()
+  for(m in c("Ir193Di", "Ir191Di")){
+    
+    tr[[m]] <- c(deGate(ff_t, m,
+                        tinypeak.removal = tinypeak_removal1, upper = FALSE, use.upper = TRUE,
+                        alpha = alpha1, verbose = F, count.lim = 3, ...), 
+                 deGate(ff_t, m,
+                        tinypeak.removal = tinypeak_removal2, upper = TRUE, use.upper = TRUE,
+                        alpha = alpha2, verbose = F, count.lim = 3, ...)) 
+  }
+  
+  for(m in c("Ir193Di", "Ir191Di")){
+    selection[ff_t@exprs[,m] < tr[[m]][1], "intact"] <- FALSE
+    selection[ff_t@exprs[,m] > tr[[m]][2], "intact"] <- FALSE
+  }
+  
+  percentage <- (sum(selection)/length(selection))*100
+  plotDens(ff_t, c("Ir193Di", "Ir191Di"), 
+           main = paste0(basename(file_name)," ( ", format(round(percentage, 2), 
+                                                      nsmall = 2), "% )"))
+  
+  abline(h = c(tr[["Ir191Di"]]))
+  abline(v = c(tr[["Ir193Di"]]))
+  points(ff_t@exprs[!selection[,"intact"], c("Ir193Di", "Ir191Di")], pch = ".")
+  
+  ff <- ff[selection[,"intact"], ]
+  
+  return(ff)
 }
 
-plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(), 
+#' @description Performs gating of live cells using flowDensity package
+#' @param flow_frame Character, full path to fcs_file.
+#' @param file_name Character, the file name used only for plotting, if NULL
+#' the file name stored in keyword GUID.original will be used, default is set to NULL
+#' @param viability_channel Character, the channel name used for viability staining, 
+#' default is set to ""
+#' @param tinypeak_removal_viability, numeric from 0-1, as in deGate to exclude/include 
+#' tiny peaks in the tail of the density ditribution curve for both viability channel 
+#' @param tinypeak_removal_Iridium the same as tinypeak_removal_viablity but for
+#' the head and tail of the density ditribution curve in Iridium channel
+#' @param alpha_viability numeric, 0-1, as in deGate specify the significance of change 
+#' in the slope of viability channel
+#' @param alpha_Iridium the same as in alpha_viability but for the Iridium
+#' @param arcsine_transform Logical, if the data should be transformed with 
+#' arcsine transformation and cofactor 5.
+
+gate_live_cells <- function(flow_frame, 
+                            file_name = NULL,
+                            viability_channel,
+                            tinypeak_removal_viability = 0.8,
+                            alpha_viability = 0.1,
+                            tinypeak_removal_Iridium = 0.8,
+                            alpha_Iridium = 0.05,
+                            arcsine_transform = TRUE, ... ){
+  
+  ff <-  flow_frame
+  
+  if (is.null(file_name)){
+    file_name <- ff@description$GUID.original
+  } else {
+    file_name 
+  }
+  
+  if(arcsine_transform == TRUE){
+    
+    ff_t <- transform(ff, 
+                      transformList(colnames(ff)[grep("Di", colnames(ff))], 
+                                    CytoNorm::cytofTransform))
+  } else {
+    ff_t <- ff
+  }
+  
+  selection <- matrix(TRUE,
+                      nrow = nrow(ff),
+                      ncol = 1,
+                      dimnames = list(NULL,
+                                      c("live")))
+  
+  
+  v_ch <- grep(viability_channel, colnames(ff), value = T)
+  
+  tr <- list()
+  for(m in c("Ir191Di", v_ch)){
+    if (m == v_ch) {
+      upper = TRUE
+      alpha = alpha_viability
+      tr[[m]] <- deGate(ff_t, m,
+                        tinypeak.removal = tinypeak_removal_viability, upper = upper, use.upper = TRUE,
+                        alpha = alpha, verbose = F, count.lim = 3)
+      
+    } else {
+      alpha = alpha_Iridium
+      tr[[m]] <- c(deGate(ff_t, m,
+                          tinypeak.removal = tinypeak_removal_Iridium, upper = FALSE, use.upper = TRUE,
+                          alpha = alpha,  verbose = F, count.lim = 3), 
+                   deGate(ff_t, m,
+                          tinypeak.removal = tinypeak_removal_Iridium, upper = TRUE, use.upper = TRUE,
+                          alpha = alpha, verbose = F, count.lim = 3)) 
+      
+    }
+  }
+  
+  for(m in c(v_ch, "Ir191Di")){
+    if (m == v_ch) {
+      selection[ff_t@exprs[,m] > tr[[m]][1], "live"] <- FALSE 
+    } else {
+      selection[ff_t@exprs[,m] < tr[[m]][1], "live"] <- FALSE
+      selection[ff_t@exprs[,m] > tr[[m]][2], "live"] <- FALSE  
+    }
+  }
+  percentage <- (sum(selection[,"live"]/sum(selection)))*100  
+  plotDens(ff_t, c(v_ch, "Ir191Di"), 
+           main = paste0(file_name," ( ", format(round(percentage, 2), nsmall = 2), "% )"),
+           xlim = c(0, 8), ylim = c(0, 8))
+  
+  abline(h = tr[["Ir191Di"]])
+  abline(v = tr[[v_ch]])
+  
+  points(ff_t@exprs[!selection[,"live"], c(v_ch, "Ir191Di")], pch = ".") 
+  
+  ff <- ff[selection[,"live"], ]
+  
+  return(ff)
+  
+}
+
+#' @description Performs gating of live cells using flowDensity package
+#' @param files_before_norm Character, full path to the unnormalized fcs_files.
+#' @param files_after_norm Character, full path to the normalized fcs_files.
+#' @param out_dir Character, pathway to where the plots should be saved, 
+#' default is set to working directory.
+#' @param clustering_markers Character vector, marker names to be used for clustering,
+#' can be full marker name e.g. "CD45" or "CD" if all CD-markers needs to be plotted. 
+#' These markers are used for UMAP builduing and plotting
+#' @param functional_markers Character vector, marker names for functional markers 
+#' e.g cytokines, phosphorylated proteins etc. The functional markers will be plotted 
+#' in the file "Marker distribution across aliquots and batches"
+#' @param arcsine_transform Logical, if the data should be transformed with 
+#' arcsine transformation and cofactor 5, default is set to TRUE
+#' @param batch_pattern Character, bach pattern to be match in the fcs file name
+
+plot_batch <- function(files_before_norm , 
+                       files_after_norm, 
+                       out_dir = getwd(), 
                        clustering_markers = "CD|HLA|IgD|PD|BAFF|TCR", 
                        functional_markers = NULL, 
                        arcsine_transform = TRUE,
                        batch_pattern = "RUN[0-9]*"){
-  
-  # ff_agg  <- file.path(fSOM_dir, paste0("norm_REF_aggregated_", p, ".fcs"))
-  # if (file.exists(ff_agg)){
-  #   ff_agg <- read.FCS(ff_agg)
-  # } else {
   
   files_list <- list("files_before_norm" = files_before_norm, 
                      "files_after_norm" = files_after_norm)
@@ -1100,30 +1307,16 @@ plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(),
     p 
     plots[[name]] <- p
     
-    # if (!(is.null(functional_markers))){
-    #   
-    #   names <- gsub("_CC_gated.fcs|gated.fcs|.fcs", "", basename(files_list[[name]]))
-    #   labels <- str_match(basename(files_list[[name]]), batch_pattern)[,1]
-    #   
-    #   plot_aggregate(names = names, files = files_list[[name]], 
-    #                  markers = functional_markers, arcsine_transform = TRUE, 
-    #                  labels = labels, flow_frame_agg = ff_agg, 
-    #                  output_image = file.path(out_dir, paste0(name, "_aggregate.png")))
-    # }
   }
   
-  svg(file.path(norm_dir, "batch_effect.svg"), 
-      width = length(plots)*6, 
-      height = 6)
+  png(file.path(norm_dir, "batch_effect.png"), 
+      width = length(plots)*1000, 
+      height = 1000)
   gridExtra::grid.arrange(grobs = plots, ncol = 2)
   dev.off()
   
   
   if (!(is.null(functional_markers))){
-    
-    # batch_id <- stringr::str_match(basename(files_after_norm), 
-    #                                batch_pattern)[,1]
-    # file_id <- gsub("_CC_gated.fcs|.fcs|_gated.fcs|Norm_", "", basename(files_after_norm))
     
     markers <- c(clustering_markers, functional_markers)
     plot_marker_quantiles(files_after_norm = files_after_norm, 
@@ -1136,91 +1329,105 @@ plot_batch <- function(files_before_norm , files_after_norm, out_dir = getwd(),
   }
 }
 
-plot_aggregate <- function(names = NULL, 
-                           files = files, 
-                           markers = NULL, 
-                           labels = NULL, 
-                           output_image = "aggregate.png", 
-                           flow_frame_agg = NULL,
-                           arcsine_transform = TRUE,
-                           max_nm = 6 * 5000, #6 * 100000
-                           ymargin = c(-2,10),
-                           agg_name = "File2",
-                           colors_man = NULL){ #c(-5,10) for manual transformations, #c(-100,300) for FlowJO transformations
-  
-  if (!is.null(flow_frame_agg)){
-    ff <- AggregateFlowFrames(fileNames = files, maxcells = 1000, 
-                              cTotal = length(files)*1000, writeOutput = FALSE, 
-                              outputFile = FALSE, writeMeta = FALSE)
-  }
-  
-  matches <- paste(markers, collapse="|")
-  m <- grep(matches, get_markers(ff, colnames(ff)), 
-            ignore.case = TRUE, value = TRUE)
-  ch <- get_channels(ff, m)
-  
-  if(arcsine_transform == TRUE){
-    
-    ff <- transform(ff, transformList(ch, cytofTransform))
-  }
-  
-  data <- ff@exprs
-  file_values <- data[,agg_name]
-  #file_values_scattered <- data[,gsub("File","File_scattered",agg_name)]
-  
-  subset <- sample(seq_len(nrow(data)), min(max_nm, nrow(data)))
-  if(is.null(markers)) {
-    data <- data[subset,]
-  } else {
-    data <- data[subset, ch]
-  }
-  
-  file_values <- file_values[subset]
-  file_values_scattered <- file_values + stats::rnorm(length(file_values), 
-                                                      0, 0.1)
-  channels <- colnames(data)
-  nrows_in_plot <- floor(sqrt(length(channels)))
-  ncols_in_plot <- ceiling(length(channels)/nrows_in_plot)
-  png(output_image, width = 800*ncols_in_plot, height = 1000*nrows_in_plot)
-  par(mar = c(30.1, 12.1, 2.1, 2.1))
-  layout(matrix(seq_len(nrows_in_plot * ncols_in_plot), nrow = nrows_in_plot, 
-                byrow = TRUE))
-  if (is.null(labels)) {
-    colors <- "#00000055"
-  } else {
-    labels <- factor(labels)
-    color_palette <- colorRampPalette(RColorBrewer::brewer.pal(9,
-                                                               "Set1"))
-    colors <- paste0(color_palette(length(levels(labels))),
-                     "55")
-    if (is.null(colors_man)) {
-      colors <- colors[labels][file_values]
-    } else {
-      colors <- colors_man[labels][file_values]
-    }
-  }
-  xlabels <- names#labels 
-  for (channel in channels) {
-    print(FlowSOM::get_markers(ff, channel))
-    plot(0,
-         type = "n", xaxt = "n",
-         xlab = "", ylab = FlowSOM::get_markers(ff, channel),
-         cex.lab = 5,
-         ylim = ymargin, 
-         xlim = c(0, length(files) + 1))
-    abline(v = seq_len(length(files)), col = "lightgrey")
-    axis(side = 1, at = seq_len(length(files)), labels = xlabels, 
-         las = 2, cex.axis = 1.5)
-    points(file_values_scattered, data[, channel], pch = ".", 
-           col = colors, cex = 3)
-  }
-  dev.off()
-}
+# plot_aggregate <- function(names = NULL, 
+#                            files = files, 
+#                            markers = NULL, 
+#                            labels = NULL, 
+#                            output_image = "aggregate.png", 
+#                            flow_frame_agg = NULL,
+#                            arcsine_transform = TRUE,
+#                            max_nm = 6 * 5000, #6 * 100000
+#                            ymargin = c(-2,10),
+#                            agg_name = "File2",
+#                            colors_man = NULL){ #c(-5,10) for manual transformations, #c(-100,300) for FlowJO transformations
+#   
+#   if (!is.null(flow_frame_agg)){
+#     ff <- AggregateFlowFrames(fileNames = files, maxcells = 1000, 
+#                               cTotal = length(files)*1000, writeOutput = FALSE, 
+#                               outputFile = FALSE, writeMeta = FALSE)
+#   }
+#   
+#   matches <- paste(markers, collapse="|")
+#   m <- grep(matches, get_markers(ff, colnames(ff)), 
+#             ignore.case = TRUE, value = TRUE)
+#   ch <- get_channels(ff, m)
+#   
+#   if(arcsine_transform == TRUE){
+#     
+#     ff <- transform(ff, transformList(ch, cytofTransform))
+#   }
+#   
+#   data <- ff@exprs
+#   file_values <- data[,agg_name]
+#   #file_values_scattered <- data[,gsub("File","File_scattered",agg_name)]
+#   
+#   subset <- sample(seq_len(nrow(data)), min(max_nm, nrow(data)))
+#   if(is.null(markers)) {
+#     data <- data[subset,]
+#   } else {
+#     data <- data[subset, ch]
+#   }
+#   
+#   file_values <- file_values[subset]
+#   file_values_scattered <- file_values + stats::rnorm(length(file_values), 
+#                                                       0, 0.1)
+#   channels <- colnames(data)
+#   nrows_in_plot <- floor(sqrt(length(channels)))
+#   ncols_in_plot <- ceiling(length(channels)/nrows_in_plot)
+#   png(output_image, width = 800*ncols_in_plot, height = 1000*nrows_in_plot)
+#   par(mar = c(30.1, 12.1, 2.1, 2.1))
+#   layout(matrix(seq_len(nrows_in_plot * ncols_in_plot), nrow = nrows_in_plot, 
+#                 byrow = TRUE))
+#   if (is.null(labels)) {
+#     colors <- "#00000055"
+#   } else {
+#     labels <- factor(labels)
+#     color_palette <- colorRampPalette(RColorBrewer::brewer.pal(9,
+#                                                                "Set1"))
+#     colors <- paste0(color_palette(length(levels(labels))),
+#                      "55")
+#     if (is.null(colors_man)) {
+#       colors <- colors[labels][file_values]
+#     } else {
+#       colors <- colors_man[labels][file_values]
+#     }
+#   }
+#   xlabels <- names#labels 
+#   for (channel in channels) {
+#     print(FlowSOM::get_markers(ff, channel))
+#     plot(0,
+#          type = "n", xaxt = "n",
+#          xlab = "", ylab = FlowSOM::get_markers(ff, channel),
+#          cex.lab = 5,
+#          ylim = ymargin, 
+#          xlim = c(0, length(files) + 1))
+#     abline(v = seq_len(length(files)), col = "lightgrey")
+#     axis(side = 1, at = seq_len(length(files)), labels = xlabels, 
+#          las = 2, cex.axis = 1.5)
+#     points(file_values_scattered, data[, channel], pch = ".", 
+#            col = colors, cex = 3)
+#   }
+#   dev.off()
+# }
 
+#' @description Builds UMAP on aggregated flow frame 
+#' @param fcs_files Character, full path to fcs_files.
+#' @param clustering_markers Character vector, marker names to be used for clustering,
+#' can be full marker name e.g. "CD45" or "CD" if all CD-markers needs to be plotted
+#' @param functional_markers Character vector, marker names for functional markers 
+#' e.g cytokines, phosphorylated proteins etc. The functional markers will be plotted 
+#' in the file "Marker distribution across aliquots and batches"
+#' @param out_dir Character, pathway to where the plots should be saved, 
+#' default is set to working directory.
+#' @param batch_pattern Character, bach pattern to be match in the fcs file name
+#' @param arcsine_transform arcsine_transform Logical, if the data should be transformed with 
+#' arcsine transformation and cofactor 5, default is set to TRUE
 
-UMAP <- function(fcs_files, clustering_markers = c("CD", "HLA", "IgD"),
+UMAP <- function(fcs_files, 
+                 clustering_markers = c("CD", "HLA", "IgD"),
                  functional_markers = c("IL", "TNF", "TGF", "Gr", "IF"),
-                 out_dir = getwd(), batch_pattern = "day[0-9]*", 
+                 out_dir = getwd(), 
+                 batch_pattern = "day[0-9]*", 
                  arcsine_transform = TRUE){
   
   set.seed(1)
@@ -1275,8 +1482,6 @@ UMAP <- function(fcs_files, clustering_markers = c("CD", "HLA", "IgD"),
   df$file_id <- ff_samp[,"File2"]
   df$batch <- NA
   df$sample_name <- NA
-  # dimred_df$indyvidual<- NA
-  # dimred_df$stimulation <- NA
   
   for (i in 1:length(fcs_files)){
     
@@ -1285,30 +1490,7 @@ UMAP <- function(fcs_files, clustering_markers = c("CD", "HLA", "IgD"),
     df[df[, "file_id"] == i, "batch"] <- batch
     sample_id <- gsub(".fcs|_gated.fcs|_CC_gated.fcs","", basename(file))
     df[df[, "file_id"] == i, "sample_name"] <- sample_id
-    # if (!is.null(indyvidual_pattern)){
-    #   id <- paste(indyvidual_pattern, collapse="|")
-    #   ids <- stringr::str_match(file, id)[,1]
-    #   dimred_df[dimred_df[, "file_id"] == i, "indyvidual"] <- ids
-    # }
-    # if (!is.null(stimulation_pattern)){
-    #   stim <- paste(stimulation_pattern, collapse="|")
-    #   stims <- stringr::str_match(file, stim)[,1]
-    #   dimred_df[dimred_df[, "file_id"] == i, "stimulation"] <- stims
-    # }
-    
   }
-  # 
-  # p <- ggplot(dimred_df,  aes_string(x = "dim1", y = "dim2")) +
-  #   geom_point(aes(color = batch), size = 0.8, position="jitter") +
-  #   theme_bw() +
-  #   # ggtitle()+
-  #   # scale_color_manual(values=col )+
-  #   scale_color_gradientn("Eu151Di", 
-  #                          colours = grDevices::colorRampPalette(rev(brewer.pal(n = 11, name = "Spectral")))(50))+
-  #   theme(legend.position = "bottom")
-  # 
-  # p 
-  # 
   
   return(df)
   
