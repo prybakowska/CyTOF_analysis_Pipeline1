@@ -33,7 +33,7 @@ if(!require("SingleCellExperiment")){
   library(SingleCellExperiment)
 }
 
-if(!require("FlowSOM")){
+if(!require("ggplot2")){
   install.packages("ggplot2")
   library(ggplot2)
 }
@@ -56,6 +56,8 @@ if(!require("flowAI")){
 # if(!require("devel")){
 #   BiocManager::install("devel")
 # }
+
+# TODOD check if yiou can install in the version 4 in r oit worked for Katrin by github
 
 if(!require("flowCut")){
   BiocManager::install("flowCut")

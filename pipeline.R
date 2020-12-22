@@ -1,6 +1,5 @@
 # TODO in the files change the name for 165 as you do not haave this marker
 
-
 source('~/Documents/CyTOF_workflow/CytofPipeline1/instalation.R')
 source('~/Documents/CyTOF_workflow/CytofPipeline1/functions.R')
 
@@ -34,7 +33,7 @@ if(!dir.exists(bead_norm_dir)) dir.create(bead_norm_dir)
 files <- list.files(file.path(raw_data_dir), pattern = ".FCS$", full.names = T)
 
 # create reference sample to which all the files will be normalized 
-ref_sample <- create_ref(fcs_files = files, beads = "dvs", out_dir = bead_norm_dir)
+ref_sample <- baseline_file(fcs_files = files, beads = "dvs", out_dir = bead_norm_dir)
 
 # Normalize file by file in the loop, saving new file with each loop execution
 for (file in files){
@@ -78,8 +77,10 @@ batch_pattern <- str_match(basename(files_b), ".*(day[0-9]*).*.FCS")[,2]
 
 plot_marker_quantiles(files_after_norm = files_a, files_before_norm = files_b, 
                       batch_pattern = batch_pattern, arcsine_transform = TRUE,
+                      uncommon_prefix = "_beadNorm.fcs|.FCS", 
                       markers_to_plot = c("CD", "HLA", "IgD", "IL", "TNF",
-                                          "TGF", "GR", "IF"), 
+                                          "TGF", "GR", "IF"),
+                      manual_colors = c("darkorchid4", "darkorange", "darkgreen"),
                       out_dir = bead_norm_dir)
 
 # ------------------------------------------------------------------------------
@@ -138,9 +139,6 @@ file_batch_id <- stringr::str_match(basename(files),
 # Define out_dir for diagnostic plots
 quality_dir <- file.path(dir, "Quality_control")
 
-
-#ToDO adapt code to the new function
-
 file_quality_check(fcs_files = files, file_batch_id = file_batch_id, 
                    out_dir = quality_dir,
                    phenotyping_markers = c("Ir","CD", "HLA", "IgD", "Pt"), 
@@ -163,7 +161,7 @@ debarcode_dir <- file.path(dir, "Debarcoded")
 
 # Read in files scores
 file_scores <- readRDS(list.files(dir, recursive = TRUE, 
-                               pattern = "AOF_sample_scores.RDS"))
+                               pattern = "Quality_AOF_score.RDS"))
 
 # Select good quality files
 good_files <- file_scores$file_names[file_scores$quality == "good"]
@@ -249,7 +247,7 @@ cytofclean::cytofclean_GUI()
 cytof_clean_dir <- file.path(dir, "Aggregated", "CyTOFClean")
 
 # Set output directory 
-out_dir <- file.path(dir, "Gated")
+gate_dir <- file.path(dir, "Gated")
 if (!dir.exists(gate_dir)) { 
   dir.create(gate_dir)
 }
@@ -272,12 +270,11 @@ for (file in files){
   ff <- gate_live_cells(flow_frame = ff, viability_channel = "Pt195Di",
                         out_dir = gate_dir)
   
-  write.FCS(ff, file.path(out_dir,
+  write.FCS(ff, file.path(gate_dir,
                       gsub(".fcs", "_gated.fcs", basename(file))))
 }
 
 dev.off()
-
 
 # ------------------------------------------------------------------------------
 # Normalization using reference sample -----------------------------------------
@@ -296,7 +293,7 @@ labels_ref <- stringr::str_match(basename(files_ref),
 # Define channels to be normalized
 ff <- read.FCS(files_ref[1])
 channels <- grep("Pd|Rh|140", grep("Di", colnames(ff), value = T), 
-                 value = T, invert = T) #TODO channels should not have pd 
+                 value = T, invert = T) 
 
 # Define out_dir for normalized files
 norm_dir <- file.path(dir, "CytoNormed")
@@ -361,7 +358,17 @@ plot_batch(files_before_norm = files_before_norm,
            files_after_norm = files_after_norm,
            out_dir = norm_dir, batch_pattern = batch_pattern, 
            clustering_markers = c("CD", "IgD", "HLA"),
-           functional_markers = c("IL", "Gran", "TNF", "TGF", "MIP", "MCP"))
+           manual_colors = c("deeppink2", "yellow", "deepskyblue2"))
+
+batch_pattern <- "day[0-9]*"
+plot_marker_quantiles(files_after_norm = files_after_norm, 
+                      files_before_norm = files_before_norm, 
+                      batch_pattern = batch_pattern, 
+                      arcsine_transform = TRUE,
+                      markers_to_plot = c("CD", "HLA", "IgD", "IL", "TNF",
+                                          "TGF", "GR", "IF"),
+                      manual_colors = c("darkorchid4", "darkorange", "darkgreen"),
+                      out_dir = norm_dir)
 
 # ------------------------------------------------------------------------------
 # Run UMAP ---------------------------------------------------------------------
@@ -406,7 +413,7 @@ markers_to_plot <- grep("CD|HLA|IgD",
                            colnames(df), value = TRUE)
 
 
-# create a list to store the singel plots
+# create a list to store the single plots
 plots <- list()
 
 # plot the map for each markers
