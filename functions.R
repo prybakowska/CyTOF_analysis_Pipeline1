@@ -279,11 +279,6 @@ bead_normalize <- function(flow_frame,
   
   if (!is.null(markers_to_keep)){
 
-    # TODO think about it comment from Katrien   
-    if (is.null(markers_to_keep)){
-      stop("pattern for markers needs to be specify")
-    }
-    
     matches <- paste(markers_to_keep, collapse="|")
     
     m_to_keep <- grep(matches, get_markers(flow_frame, colnames(flow_frame)), 
