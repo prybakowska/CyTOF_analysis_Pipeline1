@@ -674,7 +674,7 @@ aof_scoring <- function(fcs_files,
   
   scaled_aof_score(aof_scores = aof_scores, out_dir = out_dir,
                    aof_channels = phenotyping_channels, batch = batch)
-  
+}
 
 #' @description Detects outlier files based on sample AOF score, generates plot 
 #' for outlier and .csv file which indicates which fcs files could be discarded 
