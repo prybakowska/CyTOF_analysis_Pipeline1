@@ -110,9 +110,26 @@ if (!require("ggpubr")) {
   library(ggpubr)
 }
 
+#TODO: install cytoml and flowrep and correct flowcut from github
+# 
+# if (!require("CytoML")) {
+#   BiocManager::install("CytoML")
+#   library(CytoML)
+# }
 
+# library("devtools")
+# devtools::install_github("RGLab/CytoML")
 
+# library(CytoML)
+if (!require("CytoML")) {
+devtools::install_github("RGLab/CytoML", 
+                         ref = "8ef06308392c83395b26f6143b149ebbda5164d5" )
+library(CytoML)
+}
 
-
+if (!require("pals")) {
+  install.packages("pals")
+  library(pals)
+}
 
 

@@ -388,38 +388,67 @@ files <- list.files(gate_dir, pattern = ".fcs$", full.names = TRUE)
 batch_pattern <- str_match(basename(files), ".*(day[0-9]*).*.fcs")[,2]
 
 # Build UMAP on aggregated files
-UMAP <- UMAP(fcs_files = files, clustering_markers = c("CD", "HLA", "IgD"),
-             functional_markers = c("IL", "TNF", "TGF", "Gr", "IF", "MIP", "MCP1"),
-             out_dir = analysis_dir, batch_pattern = "day[0-9]*", 
-             arcsine_transform = TRUE)
+UMAP_res <- UMAP(fcs_files = files, 
+                 clustering_markers = c("CD", "HLA", "IgD"),
+                 functional_markers = c("IL", "TNF", "TGF", "Gr", "IF", "MIP", "MCP1"),
+                 out_dir = analysis_dir,
+                 batch_pattern = "day[0-9]*", 
+                 arcsine_transform = TRUE, 
+                 cells_total = 5000)
 
-saveRDS(UMAP, file.path(analysis_dir, "UMAP.RDS"))
+saveRDS(UMAP_res, file.path(analysis_dir, "UMAP.RDS"))
+
+# get manual labels for UMAP 
+# open flowJo workspace
+wsp <- CytoML::open_flowjo_xml(
+  file.path(analysis_dir, paste0("gating_strategy.wsp")))
+
+# parse the flowJo workspace
+gates <- CytoML::flowjo_to_gatingset(wsp,
+                                     "All Samples",
+                                     sampNloc = "sampleNode")
+# get cell population gate names
+gate_names <- flowWorkspace::gs_get_pop_paths(gates, path = "auto")
+
+# select which gates to plot
+celltypes_of_interest <- gate_names[-c(1, 3, 10, 14, 15, 18, 19, 20, 26, 28)]
+
+# get gating matrix for analyzed cells
+gatingMatrix <- flowWorkspace::gh_pop_get_indices_mat(gates, paste(celltypes_of_interest, collapse = "|"))
+
+# get the vector of the cell names for the sellected gates
+gating_labels <- manual_labels(gatingMatrix, celltypes_of_interest)
+
+# Add gating names column to be able to plot them on UMAP
+UMAP_res$cell_labels <- gating_labels
 
 # Plot UMAP between two donors using RSQ stimulation and day 1 batch
-
 # Add additional column to be able to do facet in ggplot
-UMAP$indyvidual <- str_match(UMAP$sample_name, "p1|p2|REF")[,1]
+UMAP_res$indyvidual <- str_match(UMAP_res$sample_name, "p1|p2|REF")[,1]
 
 # filter UMAP data frame for the needed data
-df <- UMAP %>% 
-  filter(batch == "day1" & 
-           indyvidual %in% c("p1", "p2"))
-
-df <- df %>% filter(sample_name == grep("RSQ", df[,"sample_name"], 
-                                        value = TRUE))
+df <- UMAP_res %>% 
+  dplyr::filter(batch == "day1" & 
+           indyvidual %in% c("p1", "p2") &
+           sample_name %in% grep("RSQ", UMAP_res[,"sample_name"], 
+                                 value = TRUE))
 
 # select markers to plot 
 markers_to_plot <- grep("CD|HLA|IgD",
                            colnames(df), value = TRUE)
 
+# markers_to_plot <- grep("IFNa|TNF|MIP1",
+#                         colnames(df), value = TRUE)
 
 # create a list to store the single plots
 plots <- list()
 
 # plot the map for each markers
 for(m in markers_to_plot){
- 
-  p <- ggplot(df,  aes_string(x = "dim1", y = "dim2", color = m)) +
+  
+  set.seed(20)
+  p <- df %>% dplyr::sample_n(size = 5000) %>%
+    ggplot(aes_string(x = "dim1", y = "dim2", color = m)) +
     geom_point(size = 4) +
     facet_wrap("indyvidual") +
     scale_color_gradientn(markers_to_plot[markers_to_plot == m], 
@@ -430,17 +459,73 @@ for(m in markers_to_plot){
           panel.grid.minor = element_blank(),
           plot.subtitle = element_text(color="black", size=26, hjust = 0.95, face = "bold"),
           axis.text = element_text(size = 24, colour = "black"),
-          axis.title = element_text(size = 20, colour = "black"), 
-          strip.text.x = element_text(size = 23, color = "black"),
+          # axis.title = element_text(size = 20, colour = "black"), 
+          axis.title = element_blank(),
+          # strip.text.x = element_text(size = 23, color = "black"),
+          strip.text.x = element_blank(),
           strip.background = element_rect(fill = "white"), 
-          legend.text = element_text(size = 14), 
+          legend.text = element_text(size = 16), 
           legend.title = element_text(size = 20),
           legend.position = "right") 
   
   plots[[m]] <- p
 }
 
-# plot the plots
-# ggarrange(plotlist = plots, nrow=length(markers_to_plot), ncol= 1)
+# print the plots and save them 
 ggarrange(plotlist = plots, ncol = 3, nrow = 8)
+ggsave(filename = "marker_expressions_in_UMAP.png", device = "png", 
+       path = analysis_dir, width = 18, height = 20)
+
+# select number of colors equal to the number of cell populations
+n <- length(unique(df$cell_labels))
+myColors <- pals::glasbey(n = n)
+#  asign population names to the color
+names(myColors) <- unique(df$cell_labels)
+#  for better visualization change color for Unknown population to white
+myColors["Unknown"] <- "white"
+#  set seed to get reprocucible results
+set.seed(20)
+# plot manual labels on UMAP, subset the number of cells for easier interpretation 
+df %>% dplyr::sample_n(size = 8000) %>%
+  ggplot(aes_string(x = "dim1", y = "dim2", fill = "cell_labels")) +
+  geom_point(size = 5, pch = 21) +
+  scale_fill_manual(values = myColors)+
+  guides(fill = guide_legend(ncol = 1)) +
+  # facet_wrap("indyvidual") +
+  # scale_color_gradientn(markers_to_plot[markers_to_plot == m], 
+  #                       colours = colorRampPalette(rev(brewer.pal(n = 11, name = "Spectral")))(50))  +
+  theme(panel.background = element_rect(fill = "white", colour = "black",
+                                        size = 2, linetype = "solid"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.subtitle = element_text(color="black", size=26, hjust = 0.95, face = "bold"),
+        axis.text = element_text(size = 24, colour = "black"),
+        axis.title = element_blank(), 
+        strip.text.x = element_text(size = 23, color = "black"),
+        strip.background = element_rect(fill = "white"), 
+        legend.text = element_text(size = 20), 
+        legend.title = element_blank(),
+        legend.position = "right", 
+        legend.key = element_blank()) 
+
+# save the plot 
+ggsave(filename = "manual_labels_UMAP.png", device = "png", 
+       path = analysis_dir, width = 18, height = 20)
+
+# gating_labels <- readRDS(file.path(dir, "gating_labels.RDS"))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

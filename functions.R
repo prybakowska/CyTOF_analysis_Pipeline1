@@ -207,6 +207,7 @@ clean_signal <- function(flow_frame, channels_to_clean = NULL, to_plot = "All",
 baseline_file <- function(fcs_files, beads = "dvs", to_plot = FALSE, 
                        out_dir = getw(), k = 80, ncells = 25000, ...){
   # TODO ASKSOFIE if she could change the function so that only selected channels are in the aggregated files
+  # TODO you can select channels channels 
   ff <- AggregateFlowFrames(fileNames = fcs_files, cTotal = length(fcs_files)*ncells)
   
   dat <- prepData(ff) 
@@ -262,8 +263,9 @@ baseline_file <- function(fcs_files, beads = "dvs", to_plot = FALSE,
 #' only if argument to_plot = TRUE, default is set to working directory.
 #' @param k the same as in normCytof from CATALYST package, integer width of the 
 #' median window used for bead smoothing (affects visualizations only!).
-#' @return Bead normalized flow frame without the beads.
 #' @param ... Additional arguments to pass to normCytof
+#' @return Bead normalized flow frame without the beads.
+
 
 bead_normalize <- function(flow_frame,  
                            markers_to_keep = NULL, 
@@ -357,6 +359,8 @@ bead_normalize <- function(flow_frame,
 #' the number of colors needs to be equal to the length of batch_pattern
 #' @param out_dir Character, pathway to where the plots should be saved, 
 #' default is set to working directory.
+#' 
+#' TODO return nothing is return but the file is save in  plaplpa 
 
 # Plot diagnostic plot for markers across each run 
 plot_marker_quantiles <- function(files_before_norm,
@@ -1329,8 +1333,9 @@ gate_live_cells <- function(flow_frame,
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5, default is set to TRUE
 #' @param batch_pattern Character, bach pattern to be match in the fcs file name
-#' @param @param manual_colors character, vector of the colors to be used, 
+#' @param manual_colors character, vector of the colors to be used, 
 #' the number of colors needs to be equal to the length of batch_pattern
+#' @param cells_total number of cells to plot per each file 
 
 plot_batch <- function(files_before_norm , 
                        files_after_norm, 
@@ -1338,7 +1343,8 @@ plot_batch <- function(files_before_norm ,
                        clustering_markers = "CD|HLA|IgD|PD|BAFF|TCR", 
                        arcsine_transform = TRUE,
                        batch_pattern = "RUN[0-9]*",
-                       manual_colors = NULL){
+                       manual_colors = NULL, 
+                       cells_total = 1000){
   
   files_list <- list("files_before_norm" = files_before_norm, 
                      "files_after_norm" = files_after_norm)
@@ -1348,11 +1354,11 @@ plot_batch <- function(files_before_norm ,
     
     set.seed(1)
     ff_agg <- AggregateFlowFrames(fileNames = files_list[[name]],
-                                  cTotal = length(files_list[[name]]) * 1000,
+                                  cTotal = length(files_list[[name]]) * cells_total,
                                   verbose = TRUE,
                                   writeMeta = FALSE,
                                   writeOutput = FALSE,
-                                  outputFile = file.path(out_dir, paste0("norm_REF_aggregated_", ".fcs")))
+                                  outputFile = file.path(out_dir, paste0("aggregated_for_batch_plotting.fcs")))
     # }
     
     if (arcsine_transform == TRUE){
@@ -1372,18 +1378,18 @@ plot_batch <- function(files_before_norm ,
       x
     })
     
-    set.seed(1)
-    samp <- length(files_list[[name]])
-    ff_samp <- ff_agg@exprs[sample(nrow(ff_agg@exprs), samp*500), ]
+    # set.seed(1)
+    # samp <- length(files_list[[name]])
+    # ff_samp <- ff_agg@exprs[sample(nrow(ff_agg@exprs), samp*500), ]
     
     set.seed(123)
-    dimred_res <- uwot::umap(X = ff_samp[, names(cl_markers)], 
+    dimred_res <- uwot::umap(X = ff_agg@exprs[, names(cl_markers)], 
                              n_neighbors = 15, scale = TRUE)
     
     dimred_df <- data.frame(dim1 = dimred_res[,1], dim2= dimred_res[,2],
-                            ff_samp[, names(cl_markers)])
+                            ff_agg@exprs[, names(cl_markers)])
     
-    dimred_df$file_id <- ff_samp[,"File2"]
+    dimred_df$file_id <- ff_agg@exprs[,"File2"]
     dimred_df$batch <- NA
     
     for (i in 1:length(files_list[[name]])){
@@ -1520,21 +1526,23 @@ plot_batch <- function(files_before_norm ,
 #' @param batch_pattern Character, bach pattern to be match in the fcs file name
 #' @param arcsine_transform arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5, default is set to TRUE
-
+#' @param cells_total numeric, number of cells taken from each file to buil UMAP 
+#' 
 UMAP <- function(fcs_files, 
                  clustering_markers = c("CD", "HLA", "IgD"),
                  functional_markers = c("IL", "TNF", "TGF", "Gr", "IF"),
                  out_dir = getwd(), 
                  batch_pattern = "day[0-9]*", 
-                 arcsine_transform = TRUE){
+                 arcsine_transform = TRUE, 
+                 cells_total = 1000){
   
   set.seed(1)
   ff_agg <- AggregateFlowFrames(fileNames = fcs_files,
-                                cTotal = length(fcs_files) * 1000,
+                                cTotal = length(fcs_files) * cells_total,
                                 verbose = TRUE,
                                 writeMeta = TRUE,
                                 writeOutput = TRUE,
-                                outputFile = file.path(out_dir, paste0("norm_REF_aggregated_", ".fcs")))
+                                outputFile = file.path(out_dir, paste0("aggregated_for_UMAP_analysis.fcs")))
   
   if (arcsine_transform == TRUE){
     ff_agg <- transform(ff_agg,
@@ -1553,13 +1561,13 @@ UMAP <- function(fcs_files,
     x
   })
   
-  samp <- length(fcs_files)
+  # samp <- length(fcs_files)
   
-  set.seed(1)
-  ff_samp <- ff_agg@exprs[sample(nrow(ff_agg@exprs), samp*1000), ]
+  # set.seed(1)
+  # ff_samp <- ff_agg@exprs[sample(nrow(ff_agg@exprs), samp*1000), ]
   
   set.seed(123)
-  dimred_res <- uwot::umap(X = ff_samp[, names(cl_markers)], 
+  dimred_res <- uwot::umap(X = ff_agg@exprs[, names(cl_markers)], 
                            n_neighbors = 15, scale = TRUE)
   
   if (!is.null(functional_markers)){
@@ -1571,13 +1579,13 @@ UMAP <- function(fcs_files,
   }
   
   df <- data.frame(dim1 = dimred_res[,1], dim2= dimred_res[,2],
-                   ff_samp[, names(all_markers)])
+                   ff_agg@exprs[, names(all_markers)])
   
   colnames(df)[3:ncol(df)] <- gsub("_|-", "", 
                                    sub("^[0-9]*[A-Za-z]*|^[0-9]*[A-Za-z]*_","", 
                                        all_markers))
   
-  df$file_id <- ff_samp[,"File2"]
+  df$file_id <- ff_agg@exprs[,"File2"]
   df$batch <- NA
   df$sample_name <- NA
   
@@ -1593,6 +1601,21 @@ UMAP <- function(fcs_files,
   return(df)
   
 }
+
+
+manual_labels <- function (manual_matrix, cell_types) 
+{
+  if (is.list(manual_matrix)) {
+    manual_matrix <- do.call(rbind, manual_matrix)
+  }
+  manual <- rep("Unknown", nrow(manual_matrix))
+  for (cellType in cell_types) {
+    manual[manual_matrix[, cellType]] <- cellType
+  }
+  manual <- factor(manual, levels = c("Unknown", cell_types))
+  return(manual)
+}
+
 
 
 
