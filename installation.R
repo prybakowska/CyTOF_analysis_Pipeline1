@@ -1,7 +1,4 @@
 
-# todo installation double l 
-
-
 if (!requireNamespace("BiocManager", quietly = TRUE)){
   BiocManager::install(version="3.11")
 }
@@ -63,6 +60,7 @@ if(!require("flowAI")){
 # TODOD check if yiou can install in the version 4 in r oit worked for Katrin by github
 
 if(!require("flowCut")){
+  BiocManager::install(version='devel')
   BiocManager::install("flowCut")
   library(flowCut)
 }
@@ -113,22 +111,20 @@ if (!require("ggpubr")) {
   library(ggpubr)
 }
 
-#TODO: install cytoml and flowrep and correct flowcut from github
-# 
-# if (!require("CytoML")) {
-#   BiocManager::install("CytoML")
-#   library(CytoML)
-# }
+if (!require("CytoML")) {
+  BiocManager::install("CytoML")
+  library(CytoML)
+}
 
 # library("devtools")
 # devtools::install_github("RGLab/CytoML")
 
 # library(CytoML)
-if (!require("CytoML")) {
-devtools::install_github("RGLab/CytoML", 
-                         ref = "8ef06308392c83395b26f6143b149ebbda5164d5" )
-library(CytoML)
-}
+# if (!require("CytoML")) {
+# devtools::install_github("RGLab/CytoML", 
+#                          ref = "8ef06308392c83395b26f6143b149ebbda5164d5" )
+# library(CytoML)
+# }
 
 if (!require("pals")) {
   install.packages("pals")
