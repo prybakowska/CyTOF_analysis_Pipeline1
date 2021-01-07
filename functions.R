@@ -1384,6 +1384,11 @@ UMAP <- function(fcs_files,
   
 }
 
+#' @description Get the vector of manual labels for each cell
+#' @param manual_matrix matrix with TRUE and FALSE values for each cell and 
+#' each population name
+#' @param cell_types character, the cells of interest
+#' @return vector of manual labels for each cells 
 
 manual_labels <- function (manual_matrix, cell_types) 
 {
