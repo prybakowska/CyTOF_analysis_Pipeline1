@@ -1,22 +1,30 @@
 # TODO in the files change the name for 165 as you do not haave this marker
+# TODO send installation file to github and remove instalation from github
 
-source('~/Documents/CyTOF_workflow/CytofPipeline1/instalation.R')
-source('~/Documents/CyTOF_workflow/CytofPipeline1/functions.R')
+# set your working directory to the folder where the files were downloaded 
+# using setwd()
 
-# set working directory
-dir <- "/home/paulina/Documents/CyTOF_workflow/data_cyt"
-setwd(dir)
+#  execute
+source('installation.R')
+source('functions.R')
+
+# create data folder where all analysis will be stored
+dir.create("data")
+
+# set it as a main directory 
+dir <- file.path(getwd(), "data")
 
 # ------------------------------------------------------------------------------
 # Download data from flowrepository --------------------------------------------
 #-------------------------------------------------------------------------------
 
-# connect to flowrepository data
+# Connect to flowrepository 
 ds <- flowRep.get("FR-FCM-Z3YR") 
 summary(ds)
 
 # Download the flowrepository data
-ds <- download(object = ds, dirpath = file.path(dir, "RawFiles")) 
+ds <- download(object = ds, 
+               dirpath = file.path(dir, "RawFiles")) 
 
 # ------------------------------------------------------------------------------
 # Bead normalization -----------------------------------------------------------
@@ -30,21 +38,28 @@ bead_norm_dir <- file.path(dir, "BeadNorm")
 if(!dir.exists(bead_norm_dir)) dir.create(bead_norm_dir)
 
 # define full pathway to the files that you want to normalize
-files <- list.files(file.path(raw_data_dir), pattern = ".FCS$", full.names = T)
+files <- list.files(file.path(raw_data_dir), 
+                    pattern = ".FCS$", 
+                    full.names = T)
 
 # create reference sample to which all the files will be normalized 
-ref_sample <- baseline_file(fcs_files = files, beads = "dvs", out_dir = bead_norm_dir)
+ref_sample <- baseline_file(fcs_files = files, 
+                            beads = "dvs", 
+                            out_dir = bead_norm_dir)
 
 # Normalize file by file in the loop, saving new file with each loop execution
 for (file in files){
   
   # read fcs file
-  ff <- read.FCS(file, transformation = FALSE, truncate_max_range = FALSE)
+  ff <- read.FCS(file, transformation = FALSE, 
+                 truncate_max_range = FALSE)
   
   # bead normalize the files
   ff_norm <- bead_normalize(flow_frame = ff, 
-                            out_dir = bead_norm_dir, norm_to_ref = ref_sample, 
-                            to_plot = TRUE, k = 80,
+                            out_dir = bead_norm_dir, 
+                            norm_to_ref = ref_sample, 
+                            to_plot = TRUE, 
+                            k = 80,
                             markers_to_keep = c("CD", "HLA", "IgD", "TCR", "Ir", 
                                                 "Viability","IL", "IFNa",
                                                 "TNF", "TGF", "MIP", "MCP", "Granz"))
@@ -65,18 +80,22 @@ bead_norm_dir <- file.path(dir, "BeadNorm")
 # Define files for visualization
 
 # before normalization 
-files_b <- list.files(file.path(raw_data_dir), pattern = ".FCS$", 
-                    full.names = TRUE)
+files_b <- list.files(file.path(raw_data_dir), 
+                      pattern = ".FCS$", 
+                      full.names = TRUE)
 
 # after normalization 
-files_a <- list.files(file.path(bead_norm_dir), pattern = "_beadNorm.fcs$", 
-                    full.names = TRUE)
+files_a <- list.files(file.path(bead_norm_dir), 
+                      pattern = "_beadNorm.fcs$", 
+                      full.names = TRUE)
 
 # Define batch id and sample id for each file
 batch_pattern <- str_match(basename(files_b), ".*(day[0-9]*).*.FCS")[,2]
 
-plot_marker_quantiles(files_after_norm = files_a, files_before_norm = files_b, 
-                      batch_pattern = batch_pattern, arcsine_transform = TRUE,
+plot_marker_quantiles(files_after_norm = files_a, 
+                      files_before_norm = files_b, 
+                      batch_pattern = batch_pattern, 
+                      arcsine_transform = TRUE,
                       uncommon_prefix = "_beadNorm.fcs|.FCS", 
                       markers_to_plot = c("CD", "HLA", "IgD", "IL", "TNF",
                                           "TGF", "GR", "IF"),
@@ -95,26 +114,31 @@ clean_dir <- file.path(dir, "Cleaned")
 if(!dir.exists(clean_dir)) dir.create(clean_dir)
 
 # Define which files will be cleaned
-files <- list.files(file.path(bead_norm_dir), pattern = "_beadNorm.fcs$", 
+files <- list.files(file.path(bead_norm_dir), 
+                    pattern = "_beadNorm.fcs$", 
                     full.names = TRUE)
 
 # Clean file by file in the loop, saving new file with each loop
 for (file in files) {
   
   # read fcs file
-  ff <- read.FCS(filename = file, transformation = FALSE)
+  ff <- read.FCS(filename = file, 
+                 transformation = FALSE)
   
   # norm_not_na <- which(apply(ff_t@exprs, 1, function(x){all(!is.na(x))}))
   # ff_t <- ff_t[norm_not_na, ]
   
   # clean Flow Rate and signal instability
-  ff <- clean_flow_rate(flow_frame = ff, out_dir = clean_dir, to_plot = TRUE)
+  ff <- clean_flow_rate(flow_frame = ff, 
+                        out_dir = clean_dir, 
+                        to_plot = TRUE)
   
   # clean Signal 
-  ff <- clean_signal(flow_frame = ff, to_plot = "All", out_dir = clean_dir, 
+  ff <- clean_signal(flow_frame = ff, 
+                     to_plot = "All", 
+                     out_dir = clean_dir, 
                      arcsine_transform = TRUE, 
                      non_used_bead_ch = "140")
-  # TOSOFIE TOKATRIEN shoudl we take more parameters from flowcut as user defined? 
 
   # Write FCS files
   write.FCS(ff,
@@ -129,7 +153,8 @@ for (file in files) {
 clean_dir <- file.path(dir, "Cleaned")
 
 # Define files for visualization
-files <- list.files(file.path(clean_dir), pattern = "_cleaned.fcs$", 
+files <- list.files(file.path(clean_dir), 
+                    pattern = "_cleaned.fcs$", 
                     full.names = TRUE)
 
 # Define batch_id for each file 
@@ -139,7 +164,8 @@ file_batch_id <- stringr::str_match(basename(files),
 # Define out_dir for diagnostic plots
 quality_dir <- file.path(dir, "Quality_control")
 
-file_quality_check(fcs_files = files, file_batch_id = file_batch_id, 
+file_quality_check(fcs_files = files, 
+                   file_batch_id = file_batch_id, 
                    out_dir = quality_dir,
                    phenotyping_markers = c("Ir","CD", "HLA", "IgD", "Pt"), 
                    arcsine_transform = TRUE, 
@@ -153,15 +179,17 @@ file_quality_check(fcs_files = files, file_batch_id = file_batch_id,
 clean_dir <- file.path(dir, "Cleaned")
 
 # Define files for debarcoding
-files <- list.files(file.path(clean_dir), pattern = "_cleaned.fcs$", 
+files <- list.files(file.path(clean_dir), 
+                    pattern = "_cleaned.fcs$", 
                     full.names = TRUE)
 
 # Define out_dir for diagnostic plots
 debarcode_dir <- file.path(dir, "Debarcoded")
 
 # Read in files scores
-file_scores <- readRDS(list.files(dir, recursive = TRUE, 
-                               pattern = "Quality_AOF_score.RDS"))
+file_scores <- readRDS(list.files(dir, 
+                                  recursive = TRUE, 
+                                  pattern = "Quality_AOF_score.RDS"))
 
 # Select good quality files
 good_files <- file_scores$file_names[file_scores$quality == "good"]
@@ -191,9 +219,12 @@ for (batch in unique(file_batch_id)){
 
 # Deabarcode files 
 debarcode_files(fcs_files = fcs_files_clean, 
-                out_dir = debarcode_dir, min_threshold = TRUE, 
-                barcodes_used = barcodes_list, file_batch_id = file_batch_id, 
-                less_than_th = TRUE, barcode_key = sample_key)
+                out_dir = debarcode_dir, 
+                min_threshold = TRUE, 
+                barcodes_used = barcodes_list, 
+                file_batch_id = file_batch_id, 
+                less_than_th = TRUE, 
+                barcode_key = sample_key)
 
 # ------------------------------------------------------------------------------
 # Files aggregation ------------------------------------------------------------
@@ -203,7 +234,8 @@ debarcode_files(fcs_files = fcs_files_clean,
 debarcode_dir <- file.path(dir, "Debarcoded")
 
 # Define files for debarcoding
-files <- list.files(file.path(debarcode_dir), pattern = "_debarcoded.fcs$", 
+files <- list.files(file.path(debarcode_dir), 
+                    pattern = "_debarcoded.fcs$", 
                     full.names = TRUE, recursive = T)
 
 # Define out_dir for aggregated files
@@ -225,7 +257,8 @@ for (i in seq_len(nrow(md))){
   patterns <- as.character(md[i, c("barcode_name", "BATCH")])
   
   files_to_agg <- grep(pattern = patterns[2],
-                       grep(pattern = patterns[1], files, value = TRUE), 
+                       grep(pattern = patterns[1], 
+                            files, value = TRUE), 
                        value = TRUE)
   
   print(paste0("Creating ", md[[i, "fcs_new_name"]]))
@@ -253,21 +286,29 @@ if (!dir.exists(gate_dir)) {
 }
 
 # List files for gating 
-files <- list.files(cytof_clean_dir, pattern = ".fcs$", full.names = TRUE)
+files <- list.files(cytof_clean_dir, 
+                    pattern = ".fcs$", 
+                    full.names = TRUE)
 
 # Gate the files and plot the gating strategy for each file 
 n_plots <- 2  
-png(file.path(gate_dir,
-              paste0("gating.png")),
-    width = n_plots * 300, height = length(files) * 300)
-layout(matrix(1:(length(files) * n_plots), ncol = n_plots, byrow = TRUE))
+png(file.path(gate_dir, paste0("gating.png")),
+    width = n_plots * 300, 
+    height = length(files) * 300)
+layout(matrix(1:(length(files) * n_plots), 
+              ncol = n_plots, 
+              byrow = TRUE))
 
 for (file in files){
   
-  ff <- read.FCS(file, transformation = FALSE)
+  ff <- read.FCS(filename = file, 
+                 transformation = FALSE)
   
-  ff <- gate_intact_cells(flow_frame = ff, file_name = NULL)
-  ff <- gate_live_cells(flow_frame = ff, viability_channel = "Pt195Di",
+  ff <- gate_intact_cells(flow_frame = ff, 
+                          file_name = NULL)
+  
+  ff <- gate_live_cells(flow_frame = ff, 
+                        viability_channel = "Pt195Di",
                         out_dir = gate_dir)
   
   write.FCS(ff, file.path(gate_dir,
@@ -284,15 +325,19 @@ dev.off()
 gate_dir <- file.path(dir, "Gated")
 
 # Define reference samples
-files_ref <- list.files(file.path(gate_dir), pattern = "REF.*_gated.fcs$", 
-                    full.names = TRUE, recursive = T)
+files_ref <- list.files(file.path(gate_dir), 
+                        pattern = "REF.*_gated.fcs$", 
+                        full.names = TRUE, 
+                        recursive = T)
 
 # Define batch labels for each files
 labels_ref <- stringr::str_match(basename(files_ref), 
                                    ".*_(day[0-9]*).*.fcs")[,2]
 # Define channels to be normalized
 ff <- read.FCS(files_ref[1])
-channels <- grep("Pd|Rh|140", grep("Di", colnames(ff), value = T), 
+channels <- grep("Pd|Rh|140", 
+                 grep("Di", colnames(ff), 
+                      value = T), 
                  value = T, invert = T) 
 
 # Define out_dir for normalized files
@@ -303,20 +348,25 @@ if(!dir.exists(norm_dir))(dir.create(norm_dir))
 png(file.path(norm_dir, "005_095_normalization.png"),
     width = length(channels) * 300,
     height = (length(files_ref) * 2 + 1) * 300)
-model <- QuantileNorm.train(files = files_ref,  labels = labels_ref, 
+model <- QuantileNorm.train(files = files_ref,
+                            labels = labels_ref, 
                             channels = channels, 
                             transformList = transformList(channels, 
                                                           cytofTransform), 
-                            nQ = 2, quantileValues = c(0.05, 0.95), goal = "mean", 
+                            nQ = 2, 
+                            quantileValues = c(0.05, 0.95), 
+                            goal = "mean", 
                             plot = TRUE)
 dev.off()
 
 # save the model
-saveRDS(object = model, file = file.path(norm_dir, "005_095_model.RDS"))
+saveRDS(object = model, 
+        file = file.path(norm_dir, "005_095_model.RDS"))
 
 # Define path to the files for normalization
-files <- list.files(file.path(gate_dir), pattern = "_gated.fcs$", 
-                        full.names = TRUE, recursive = T)
+files <- list.files(file.path(gate_dir), 
+                    pattern = "_gated.fcs$", 
+                    full.names = TRUE, recursive = T)
 
 # Define batch labels for each files, note that they need to corresponds to 
 # reference labels 
@@ -324,7 +374,9 @@ labels <- stringr::str_match(basename(files),
                              ".*_(day[0-9]*).*.fcs")[,2]
 
 # Normalize files 
-QuantileNorm.normalize(model = model, files = files, labels = labels, 
+QuantileNorm.normalize(model = model, 
+                       files = files, 
+                       labels = labels, 
                        transformList = transformList(channels, 
                                                      cytofTransform),
                        transformList.reverse = transformList(channels, 
@@ -342,21 +394,26 @@ batch_pattern <- "day[0-9]*"
 # Define files before normalization and order them according to the batch 
 # Set input directory for files before CytoNorm normalization 
 gate_dir <- file.path(dir, "Gated")
-files_before_norm <- list.files(gate_dir, pattern = ".fcs", full.names = T)
+files_before_norm <- list.files(gate_dir, 
+                                pattern = ".fcs", 
+                                full.names = T)
 batch <- str_match(files_before_norm, "day[0-9]*")[,1]
 files_before_norm <- files_before_norm[order(factor(batch))]
 
 # Define files after normalization and order them according to the batch 
 # Set input directory for files after CytoNorm normalization
 norm_dir <- file.path(dir, "CytoNormed")
-files_after_norm <- list.files(norm_dir, pattern = ".fcs", full.names = T)
+files_after_norm <- list.files(norm_dir, 
+                               pattern = ".fcs", 
+                               full.names = T)
 batch <- str_match(files_after_norm, "day[0-9]*")[,1]
 files_after_norm <- files_after_norm[order(factor(batch))]
 
 # Plot batch effect 
 plot_batch(files_before_norm = files_before_norm, 
            files_after_norm = files_after_norm,
-           out_dir = norm_dir, batch_pattern = batch_pattern, 
+           out_dir = norm_dir, 
+           batch_pattern = batch_pattern, 
            clustering_markers = c("CD", "IgD", "HLA"),
            manual_colors = c("deeppink2", "yellow", "deepskyblue2"))
 
@@ -384,7 +441,9 @@ if (!dir.exists(analysis_dir)) {
   dir.create(analysis_dir)
 }
 
-files <- list.files(gate_dir, pattern = ".fcs$", full.names = TRUE)
+files <- list.files(gate_dir, 
+                    pattern = ".fcs$", 
+                    full.names = TRUE)
 batch_pattern <- str_match(basename(files), ".*(day[0-9]*).*.fcs")[,2]
 
 # Build UMAP on aggregated files
@@ -396,7 +455,8 @@ UMAP_res <- UMAP(fcs_files = files,
                  arcsine_transform = TRUE, 
                  cells_total = 5000)
 
-saveRDS(UMAP_res, file.path(analysis_dir, "UMAP.RDS"))
+saveRDS(UMAP_res, 
+        file.path(analysis_dir, "UMAP.RDS"))
 
 # get manual labels for UMAP 
 # open flowJo workspace
@@ -414,7 +474,9 @@ gate_names <- flowWorkspace::gs_get_pop_paths(gates, path = "auto")
 celltypes_of_interest <- gate_names[-c(1, 3, 10, 14, 15, 18, 19, 20, 26, 28)]
 
 # get gating matrix for analyzed cells
-gatingMatrix <- flowWorkspace::gh_pop_get_indices_mat(gates, paste(celltypes_of_interest, collapse = "|"))
+gatingMatrix <- flowWorkspace::gh_pop_get_indices_mat(gh = gates, 
+                                                      y = paste(celltypes_of_interest, 
+                                                                collapse = "|"))
 
 # get the vector of the cell names for the sellected gates
 gating_labels <- manual_labels(gatingMatrix, celltypes_of_interest)
@@ -472,9 +534,13 @@ for(m in markers_to_plot){
 }
 
 # print the plots and save them 
-ggarrange(plotlist = plots, ncol = 3, nrow = 8)
+ggarrange(plotlist = plots, 
+          ncol = 3, 
+          nrow = 8)
 ggsave(filename = "marker_expressions_in_UMAP.png", device = "png", 
-       path = analysis_dir, width = 18, height = 20)
+       path = analysis_dir, 
+       width = 18, 
+       height = 20)
 
 # select number of colors equal to the number of cell populations
 n <- length(unique(df$cell_labels))
