@@ -1,5 +1,4 @@
-# TODO in the files change the name for 165 as you do not haave this marker
-# TODO send installation file to github and remove instalation from github
+# TODO in the files change the name for 165 as you do not haave this marker and upload to flowrep
 
 # set your working directory to the folder where the files were downloaded 
 # using setwd()
@@ -98,7 +97,7 @@ plot_marker_quantiles(files_after_norm = files_a,
                       arcsine_transform = TRUE,
                       uncommon_prefix = "_beadNorm.fcs|.FCS", 
                       markers_to_plot = c("CD", "HLA", "IgD", "IL", "TNF",
-                                          "TGF", "GR", "IF"),
+                                          "TGF", "GR", "IFNa"),
                       manual_colors = c("darkorchid4", "darkorange", "darkgreen"),
                       out_dir = bead_norm_dir)
 
@@ -423,7 +422,7 @@ plot_marker_quantiles(files_after_norm = files_after_norm,
                       batch_pattern = batch_pattern, 
                       arcsine_transform = TRUE,
                       markers_to_plot = c("CD", "HLA", "IgD", "IL", "TNF",
-                                          "TGF", "GR", "IF"),
+                                          "TGF", "GR", "IFNa"),
                       manual_colors = c("darkorchid4", "darkorange", "darkgreen"),
                       out_dir = norm_dir)
 
@@ -449,7 +448,7 @@ batch_pattern <- str_match(basename(files), ".*(day[0-9]*).*.fcs")[,2]
 # Build UMAP on aggregated files
 UMAP_res <- UMAP(fcs_files = files, 
                  clustering_markers = c("CD", "HLA", "IgD"),
-                 functional_markers = c("IL", "TNF", "TGF", "Gr", "IF", "MIP", "MCP1"),
+                 functional_markers = c("IL", "TNF", "TGF", "Gr", "IFNa", "MIP", "MCP1"),
                  out_dir = analysis_dir,
                  batch_pattern = "day[0-9]*", 
                  arcsine_transform = TRUE, 
