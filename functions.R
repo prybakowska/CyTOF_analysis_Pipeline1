@@ -938,6 +938,7 @@ debarcode_files <- function(fcs_files,
 #' default is set to NULL
 #' @param write_agg_file Logicle, if the fcs files should be saved, if TRUE 
 #' files will be saved in getwd(). Default set to FALSE
+#' @return aggregated flow frame 
 
 aggregate_files <- function(fcs_files, 
                             channels_to_keep = NULL,
@@ -1019,6 +1020,7 @@ aggregate_files <- function(fcs_files,
 #' @param alpha2 the same as in alpha1 but for the head of the density ditribution curve
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5.
+#' @return flow frame with intact cells
 
 gate_intact_cells <- function(flow_frame, 
                               file_name = NULL,
@@ -1096,6 +1098,7 @@ gate_intact_cells <- function(flow_frame,
 #' @param alpha_Iridium the same as in alpha_viability but for the Iridium
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5.
+#' @return flow frame with live cells
 
 gate_live_cells <- function(flow_frame, 
                             file_name = NULL,
@@ -1191,6 +1194,7 @@ gate_live_cells <- function(flow_frame,
 #' @param manual_colors character, vector of the colors to be used, 
 #' the number of colors needs to be equal to the length of batch_pattern
 #' @param cells_total number of cells to plot per each file 
+#' @return save plots forbatch effect in the out_dir 
 
 plot_batch <- function(files_before_norm , 
                        files_after_norm, 
@@ -1296,7 +1300,8 @@ plot_batch <- function(files_before_norm ,
 #' @param arcsine_transform arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5, default is set to TRUE
 #' @param cells_total numeric, number of cells taken from each file to buil UMAP 
-#' 
+#' @return data frame with UMAP coordinates
+ 
 UMAP <- function(fcs_files, 
                  clustering_markers = c("CD", "HLA", "IgD"),
                  functional_markers = c("IL", "TNF", "TGF", "Gr", "IF"),
