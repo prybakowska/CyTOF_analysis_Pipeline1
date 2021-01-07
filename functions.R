@@ -206,9 +206,9 @@ clean_signal <- function(flow_frame, channels_to_clean = NULL, to_plot = "All",
 
 baseline_file <- function(fcs_files, beads = "dvs", to_plot = FALSE, 
                        out_dir = getw(), k = 80, ncells = 25000, ...){
-  # TODO ASKSOFIE if she could change the function so that only selected channels are in the aggregated files
-  # TODO you can select channels channels 
-  ff <- AggregateFlowFrames(fileNames = fcs_files, cTotal = length(fcs_files)*ncells)
+
+  ff <- AggregateFlowFrames(fileNames = fcs_files, 
+                            cTotal = length(fcs_files)*ncells)
   
   dat <- prepData(ff) 
 
@@ -1022,128 +1022,6 @@ aggregate_files <- function(fcs_files,
 
   return(flowFrame)
 }
-
-#' #' @description Performs gating using flowDensity package to obtain intact and 
-#' #' live cells, creates pdf plots with gating strategy used. 
-#' #' @param fcs_files Character, full path to fcs_files.
-#' #' @param viability_channel Character, channel used for viability staining
-#' #' @param out_dir Character, pathway to where the plot and gated fcs files 
-#' #' should be stored, defaults set to getwd()
-#' #' @param arcsine_transform arcsine_transform Logical, if the data should be transformed with 
-#' #' arcsine transformation and cofactor 5.
-#' # TODO check read ff because it should be without cyfoclean_dir
-#' 
-#' gate <- function(fcs_files, viability_channel = "Pt195Di",
-#'                  out_dir = getwd(), arcsine_transform = TRUE) {
-#'   
-#'   n_plots <- 2  
-#'   png(file.path(gate_dir,
-#'                 paste0("gating.png")),
-#'       width = n_plots * 300, height = length(files) * 300)
-#'   layout(matrix(1:(length(fcs_files) * n_plots), ncol = n_plots, byrow = TRUE))
-#'   
-#'   for(file in fcs_files){
-#'     
-#'     print(paste0("Preprocessing ", file))
-#'     print(Sys.time())
-#'     
-#'     ff <- read.FCS(file, transformation = FALSE)
-#'     
-#'     if(arcsine_transform == TRUE){
-#'       
-#'       ff_t <- transform(ff, 
-#'                       transformList(colnames(ff)[grep("Di", colnames(ff))], 
-#'                                     CytoNorm::cytofTransform))
-#'     } else {
-#'       ff_t <- ff
-#'     }
-#'     
-#'     selection <- matrix(TRUE,
-#'                         nrow = nrow(ff),
-#'                         ncol = 2,
-#'                         dimnames = list(NULL,
-#'                                         c("intact", 
-#'                                           "live")))
-#'     
-#'     tr <- list()
-#'     for(m in c("Ir193Di", "Ir191Di")){
-#'       
-#'       tr[[m]] <- c(deGate(ff_t, m,
-#'                           tinypeak.removal = 0.8, upper = FALSE, use.upper = TRUE,
-#'                           alpha = 0.05, verbose = F, count.lim = 3), 
-#'                    deGate(ff_t, m,
-#'                           tinypeak.removal = 0.8, upper = TRUE, use.upper = TRUE,
-#'                           alpha = 0.1, percentile = .95, verbose = F, count.lim = 3)) 
-#'     }
-#'     
-#'     for(m in c("Ir193Di", "Ir191Di")){
-#'       selection[ff_t@exprs[,m] < tr[[m]][1], "intact"] <- FALSE
-#'       selection[ff_t@exprs[,m] > tr[[m]][2], "intact"] <- FALSE
-#'     }
-#'     
-#'     percentage <- (sum(selection)/length(selection))*100
-#'     plotDens(ff_t, c("Ir193Di", "Ir191Di"), 
-#'              main = paste0(file," ( ", format(round(percentage, 2), nsmall = 2), "% )"))
-#'     
-#'     abline(h = c(tr[["Ir191Di"]]))
-#'     abline(v = c(tr[["Ir193Di"]]))
-#'     points(ff_t@exprs[!selection[,"intact"], c("Ir193Di", "Ir191Di")], pch = ".")
-#'     
-#'     subset <- selection[, "intact"]
-#'     selection[, "live"] <- subset
-#'     
-#'     v_ch <- grep(viability_channel, colnames(ff), value = T)
-#'     
-#'     tr <- list()
-#'     for(m in c("Ir191Di", v_ch)){
-#'       if (m == v_ch) {
-#'         upper = TRUE
-#'         alpha = 0.1
-#'         tr[[m]] <- deGate(ff_t[subset,], m,
-#'                           tinypeak.removal = 0.8, upper = upper, use.upper = TRUE,
-#'                           alpha = alpha, percentile = .80, verbose = F, count.lim = 3)
-#'         
-#'       } else {
-#'         alpha = 0.05
-#'         tr[[m]] <- c(deGate(ff_t[subset,], m,
-#'                             tinypeak.removal = 0.2, upper = FALSE, use.upper = TRUE,
-#'                             alpha = 0.03, percentile = .95, verbose = F, count.lim = 3), 
-#'                      deGate(ff_t[subset,], m,
-#'                             tinypeak.removal = 0.2, upper = TRUE, use.upper = TRUE,
-#'                             alpha = alpha, percentile = .95, verbose = F, count.lim = 3)) 
-#'         
-#'       }
-#'     }
-#'     
-#'     for(m in c(v_ch, "Ir191Di")){
-#'       if (m == v_ch) {
-#'         selection[ff_t@exprs[,m] > tr[[m]][1], "live"] <- FALSE 
-#'       } else {
-#'         selection[ff_t@exprs[,m] < tr[[m]][1], "live"] <- FALSE
-#'         selection[ff_t@exprs[,m] > tr[[m]][2], "live"] <- FALSE  
-#'       }
-#'     }
-#'     percentage <- (sum(selection[,"live"]/sum(subset)))*100  
-#'     plotDens(ff_t[subset,], c(v_ch, "Ir191Di"), 
-#'              main = paste0(file," ( ", format(round(percentage, 2), nsmall = 2), "% )"),
-#'              xlim = c(0, 8), ylim = c(0, 8))
-#'     
-#'     abline(h = tr[["Ir191Di"]])
-#'     abline(v = tr[[v_ch]])
-#'     
-#'     points(ff_t@exprs[subset & !selection[,"live"], c(v_ch, "Ir191Di")], pch = ".") 
-#'     
-#'     write.FCS(ff[selection[,"live"], ],
-#'               file.path(out_dir,
-#'                         gsub(".fcs", "_gated.fcs", basename(file))))
-#'     
-#'     saveRDS(selection,
-#'             file.path(out_dir,
-#'                       gsub(".fcs", "_gatingMatrix.RDS", basename(file))))
-#'     
-#'   }
-#'   dev.off()
-#' }
 
 #' @description Performs gating of intact cells using flowDensity package
 #' @param flow_frame Character, full path to fcs_file.
