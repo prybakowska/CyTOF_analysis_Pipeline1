@@ -24,7 +24,8 @@ find_mass_ch <- function(flow_frame,
 #' only if argument to_plot = TRUE, default is set to working directory.
 #' @param alpha numeric, as in flow_auto_qc {flowAI}. The statistical 
 #' significance level used to accept anomalies. The default value is 0.01.
-#' @return Cleand, untransformed flow frame.
+#' @return Cleand, untransformed flow frame and save the plot _beadNorm_flowAI.png
+#'  in out_dir 
 
 clean_flow_rate <- function(flow_frame, to_plot = TRUE, 
                             out_dir = getwd(), alpha = 0.01) {
@@ -64,8 +65,9 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
   return(flow_frame_cl)
 }
 
-#' @description plots frow rate for .fcs files
+#' @description plots flow rate for .fcs files
 #' @param FlowRateQC list obtained using flowAI:::flow_rate_check function
+#' @return xgraph plot 
 
 plot_flowrate <- function (FlowRateQC) 
 {
@@ -112,11 +114,16 @@ plot_flowrate <- function (FlowRateQC)
 #' @param AllowFlaggedRerun as in flowCut, logical, specigy if flowCut will run
 # second time in case the file was flagged
 #' @return Cleaned, untransformed flow frame if arcsine_transform argument
-#' set to TRUE, otherwise transformed flow frame is returned
+#' set to TRUE, otherwise transformed flow frame is returned. Save plots with prefix
+#' "flowCutCleaned.png" to out_dir if parameter to_plot set to "All" or "Flagged Only".
 
-clean_signal <- function(flow_frame, channels_to_clean = NULL, to_plot = "All", 
-                         out_dir = getwd(), arcsine_transform = TRUE, 
-                         non_used_bead_ch = NULL, MaxPercCut = 0.5,
+clean_signal <- function(flow_frame, 
+                         channels_to_clean = NULL, 
+                         to_plot = "All", 
+                         out_dir = getwd(), 
+                         arcsine_transform = TRUE, 
+                         non_used_bead_ch = NULL, 
+                         MaxPercCut = 0.5,
                          UseOnlyWorstChannels = TRUE,
                          AllowFlaggedRerun = TRUE,
                          ...){
@@ -264,8 +271,8 @@ baseline_file <- function(fcs_files, beads = "dvs", to_plot = FALSE,
 #' @param k the same as in normCytof from CATALYST package, integer width of the 
 #' median window used for bead smoothing (affects visualizations only!).
 #' @param ... Additional arguments to pass to normCytof
-#' @return Bead normalized flow frame without the beads.
-
+#' @return Bead normalized flow frame without the beads. Save plots to out_dir
+#'  if argument to_plot set to TRUE
 
 bead_normalize <- function(flow_frame,  
                            markers_to_keep = NULL, 
@@ -354,8 +361,8 @@ bead_normalize <- function(flow_frame,
 #' the number of colors needs to be equal to the length of batch_pattern
 #' @param out_dir Character, pathway to where the plots should be saved, 
 #' default is set to working directory.
-#' 
-#' TODO return nothing is return but the file is save in  plaplpa 
+#' @return save the plots to out_dir with the name 
+#' "Marker distribution across aliquots and batches.pdf"
 
 # Plot diagnostic plot for markers across each run 
 plot_marker_quantiles <- function(files_before_norm,
@@ -564,6 +571,7 @@ fsom_aof <- function(fcs_files,
 #' @aof_channels Character, channels or markers for which aof was calculated
 #' @batch Character, aqusition batch for each fcs file.
 #' Pass to FlowSOM plot name, defult is set to NULL
+#' @return returns data frame with the scale AOF scores
 
 scaled_aof_score <- function(aof_scores, out_dir, aof_channels, batch = NULL){
   phenotyping_channels <- aof_channels
@@ -667,53 +675,6 @@ aof_scoring <- function(fcs_files,
   scaled_aof_score(aof_scores = aof_scores, out_dir = out_dir,
                    aof_channels = phenotyping_channels, batch = batch)
   
-  
-  # aof_scores_scaled <- scale(aof_scores)
-  # 
-  # # 
-  # # aof_scores_scaled <- apply(aof_scores_scaled,2, function(x){
-  # #   missing <- which(is.na(x))
-  # #   x[missing] <- 0
-  # #   x
-  # # })
-  # 
-  # aof_scores_scaled <- pmax(aof_scores_scaled, 0)^2
-  # sample_scores <- apply(aof_scores_scaled, 1, sum, na.rm = TRUE)
-  # 
-  # df <- as.data.frame(sample_scores)
-  # 
-  # list_scores <- list("aof_scores_per_marker" = aof_scores,
-  #                     "sample_quality_score" = aof_scores_scaled)
-  # 
-  # for (name in names(list_scores)) {
-  #   
-  #   if(!is.null(batch)){
-  #     filename <- file.path(out_dir, paste0(batch, "_", name, ".pdf"))
-  #     main <- paste0(batch, "_", name) 
-  #   } else {
-  #     filename <- file.path(out_dir, paste0(name, ".pdf"))
-  #     main <- name
-  #   }
-  #   
-  #   pheatmap(list_scores[[name]],
-  #            cluster_rows = FALSE,
-  #            cluster_cols = FALSE,
-  #            color = colorRampPalette(brewer.pal(n = 9, name =
-  #                                                      "YlGnBu"))(100),
-  #            display_numbers = TRUE,
-  #            labels_col = phenotyping_channels,
-  #            labels_row = basename(rownames(list_scores[[name]])),
-  #            filename = filename,
-  #            main = main,
-  #            number_format = "%.1f",
-  #            fontsize_number = 1.2,
-  #            number_color = "black",
-  #            width = 10)
-  # }
-  # 
-  # saveRDS(list_scores, file.path(out_dir, "aof_scores_all.RDS"))
-  # return(df)
-}
 
 #' @description Detects outlier files based on sample AOF score, generates plot 
 #' for outlier and .csv file which indicates which fcs files could be discarded 
