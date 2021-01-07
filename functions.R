@@ -1232,7 +1232,6 @@ plot_batch <- function(files_before_norm ,
                                   writeMeta = FALSE,
                                   writeOutput = FALSE,
                                   outputFile = file.path(out_dir, paste0("aggregated_for_batch_plotting.fcs")))
-    # }
     
     if (arcsine_transform == TRUE){
       ff_agg <- transform(ff_agg,
@@ -1250,10 +1249,6 @@ plot_batch <- function(files_before_norm ,
       x[x > q] <- q
       x
     })
-    
-    # set.seed(1)
-    # samp <- length(files_list[[name]])
-    # ff_samp <- ff_agg@exprs[sample(nrow(ff_agg@exprs), samp*500), ]
     
     set.seed(123)
     dimred_res <- uwot::umap(X = ff_agg@exprs[, names(cl_markers)], 
@@ -1306,87 +1301,6 @@ plot_batch <- function(files_before_norm ,
   dev.off()
 }
 
-# plot_aggregate <- function(names = NULL, 
-#                            files = files, 
-#                            markers = NULL, 
-#                            labels = NULL, 
-#                            output_image = "aggregate.png", 
-#                            flow_frame_agg = NULL,
-#                            arcsine_transform = TRUE,
-#                            max_nm = 6 * 5000, #6 * 100000
-#                            ymargin = c(-2,10),
-#                            agg_name = "File2",
-#                            colors_man = NULL){ #c(-5,10) for manual transformations, #c(-100,300) for FlowJO transformations
-#   
-#   if (!is.null(flow_frame_agg)){
-#     ff <- AggregateFlowFrames(fileNames = files, maxcells = 1000, 
-#                               cTotal = length(files)*1000, writeOutput = FALSE, 
-#                               outputFile = FALSE, writeMeta = FALSE)
-#   }
-#   
-#   matches <- paste(markers, collapse="|")
-#   m <- grep(matches, get_markers(ff, colnames(ff)), 
-#             ignore.case = TRUE, value = TRUE)
-#   ch <- get_channels(ff, m)
-#   
-#   if(arcsine_transform == TRUE){
-#     
-#     ff <- transform(ff, transformList(ch, cytofTransform))
-#   }
-#   
-#   data <- ff@exprs
-#   file_values <- data[,agg_name]
-#   #file_values_scattered <- data[,gsub("File","File_scattered",agg_name)]
-#   
-#   subset <- sample(seq_len(nrow(data)), min(max_nm, nrow(data)))
-#   if(is.null(markers)) {
-#     data <- data[subset,]
-#   } else {
-#     data <- data[subset, ch]
-#   }
-#   
-#   file_values <- file_values[subset]
-#   file_values_scattered <- file_values + stats::rnorm(length(file_values), 
-#                                                       0, 0.1)
-#   channels <- colnames(data)
-#   nrows_in_plot <- floor(sqrt(length(channels)))
-#   ncols_in_plot <- ceiling(length(channels)/nrows_in_plot)
-#   png(output_image, width = 800*ncols_in_plot, height = 1000*nrows_in_plot)
-#   par(mar = c(30.1, 12.1, 2.1, 2.1))
-#   layout(matrix(seq_len(nrows_in_plot * ncols_in_plot), nrow = nrows_in_plot, 
-#                 byrow = TRUE))
-#   if (is.null(labels)) {
-#     colors <- "#00000055"
-#   } else {
-#     labels <- factor(labels)
-#     color_palette <- colorRampPalette(RColorBrewer::brewer.pal(9,
-#                                                                "Set1"))
-#     colors <- paste0(color_palette(length(levels(labels))),
-#                      "55")
-#     if (is.null(colors_man)) {
-#       colors <- colors[labels][file_values]
-#     } else {
-#       colors <- colors_man[labels][file_values]
-#     }
-#   }
-#   xlabels <- names#labels 
-#   for (channel in channels) {
-#     print(FlowSOM::get_markers(ff, channel))
-#     plot(0,
-#          type = "n", xaxt = "n",
-#          xlab = "", ylab = FlowSOM::get_markers(ff, channel),
-#          cex.lab = 5,
-#          ylim = ymargin, 
-#          xlim = c(0, length(files) + 1))
-#     abline(v = seq_len(length(files)), col = "lightgrey")
-#     axis(side = 1, at = seq_len(length(files)), labels = xlabels, 
-#          las = 2, cex.axis = 1.5)
-#     points(file_values_scattered, data[, channel], pch = ".", 
-#            col = colors, cex = 3)
-#   }
-#   dev.off()
-# }
-
 #' @description Builds UMAP on aggregated flow frame 
 #' @param fcs_files Character, full path to fcs_files.
 #' @param clustering_markers Character vector, marker names to be used for clustering,
@@ -1433,11 +1347,6 @@ UMAP <- function(fcs_files,
     x[x > q] <- q
     x
   })
-  
-  # samp <- length(fcs_files)
-  
-  # set.seed(1)
-  # ff_samp <- ff_agg@exprs[sample(nrow(ff_agg@exprs), samp*1000), ]
   
   set.seed(123)
   dimred_res <- uwot::umap(X = ff_agg@exprs[, names(cl_markers)], 
