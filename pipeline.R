@@ -1,4 +1,3 @@
-# TODO in the files change the name for 165 as you do not have this marker and upload to flowrep
 
 # set your working directory to the folder where the files were downloaded 
 # using setwd()
@@ -579,7 +578,6 @@ ggsave(filename = "manual_labels_UMAP.png", device = "png",
 
 # gating_labels <- readRDS(file.path(dir, "gating_labels.RDS"))
 
-reprex()
 
 
 
