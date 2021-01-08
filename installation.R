@@ -116,9 +116,6 @@ if (!require("CytoML")) {
   library(CytoML)
 }
 
-# library("devtools")
-# devtools::install_github("RGLab/CytoML")
-
 # library(CytoML)
 # if (!require("CytoML")) {
 # devtools::install_github("RGLab/CytoML", 
@@ -130,5 +127,6 @@ if (!require("pals")) {
   install.packages("pals")
   library(pals)
 }
+
 
 
