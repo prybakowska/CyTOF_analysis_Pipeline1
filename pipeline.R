@@ -459,7 +459,7 @@ saveRDS(UMAP_res,
 # get manual labels for UMAP 
 # open flowJo workspace
 wsp <- CytoML::open_flowjo_xml(
-  file.path(analysis_dir, paste0("gating_strategy.wsp")))
+  file.path(analysis_dir, "gating_strategy.wsp"))
 
 # parse the flowJo workspace
 gates <- CytoML::flowjo_to_gatingset(wsp,
@@ -473,8 +473,7 @@ celltypes_of_interest <- gate_names[-c(1, 3, 10, 14, 15, 18, 19, 20, 26, 28)]
 
 # get gating matrix for analyzed cells
 gatingMatrix <- flowWorkspace::gh_pop_get_indices_mat(gh = gates, 
-                                                      y = paste(celltypes_of_interest, 
-                                                                collapse = "|"))
+                                                      y = gate_names)
 
 # get the vector of the cell names for the sellected gates
 gating_labels <- manual_labels(gatingMatrix, celltypes_of_interest)

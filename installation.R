@@ -116,17 +116,11 @@ if (!require("CytoML")) {
   library(CytoML)
 }
 
-# library(CytoML)
-# if (!require("CytoML")) {
-# devtools::install_github("RGLab/CytoML", 
-#                          ref = "8ef06308392c83395b26f6143b149ebbda5164d5" )
-# library(CytoML)
-# }
 
 if (!require("pals")) {
   install.packages("pals")
   library(pals)
 }
 
-
+BiocManager::install("flowWorkspace")
 
