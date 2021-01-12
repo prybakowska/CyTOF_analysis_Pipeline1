@@ -1,14 +1,13 @@
 
-<<<<<<< HEAD
 if (!requireNamespace("BiocManager", quietly = TRUE)){
   BiocManager::install(version="3.12")
-=======
+  }
+
 if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 
 if(!require("FlowRepositoryR")){
   BiocManager::install("BiocVersion")
->>>>>>> 044071dc735827dfd50ad30dddf8cc0dd158de20
 }
 
 if(!require("FlowRepositoryR")){
@@ -69,13 +68,9 @@ if(!require("flowAI")){
 
 
 if(!require("flowCut")){
-<<<<<<< HEAD
+
   BiocManager::install("flowCut")
-=======
-  devtools::install_github("jmeskas/flowCut")
->>>>>>> 044071dc735827dfd50ad30dddf8cc0dd158de20
   library(flowCut)
-  
 }
 
 
@@ -136,9 +131,4 @@ if (!require("pals")) {
   install.packages("pals")
   library(pals)
 }
-
-<<<<<<< HEAD
-=======
-
->>>>>>> 044071dc735827dfd50ad30dddf8cc0dd158de20
 
