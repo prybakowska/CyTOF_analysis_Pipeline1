@@ -184,6 +184,7 @@ debarcode_dir <- file.path(dir, "Debarcoded")
 # Read in files scores
 file_scores <- readRDS(list.files(dir, 
                                   recursive = TRUE, 
+                                  full.names = TRUE,
                                   pattern = "Quality_AOF_score.RDS"))
 
 # Select good quality files
@@ -439,7 +440,7 @@ if (!dir.exists(analysis_dir)) {
 files <- list.files(gate_dir, 
                     pattern = ".fcs$", 
                     full.names = TRUE)
-batch_pattern <- str_match(basename(files), ".*(day[0-9]*).*.fcs")[,2]
+batch_pattern <- stringr::str_match(basename(files), ".*(day[0-9]*).*.fcs")[,2]
 
 # Build UMAP on aggregated files
 UMAP_res <- UMAP(fcs_files = files, 
@@ -453,10 +454,16 @@ UMAP_res <- UMAP(fcs_files = files,
 saveRDS(UMAP_res, 
         file.path(analysis_dir, "UMAP.RDS"))
 
-# get manual labels for UMAP 
+# get manual labels for UMAP
+
+# copy "gating_strategy.wsp" file from RawFiles to Analysis folder so the workspace 
+# is in the same place as generated aggregated file called: "aggregated_for_UMAP_analysis.fcs"
+
+file.copy(file.path(raw_data_dir,"gating_strategy.wsp"), analysis_dir)
+
 # open flowJo workspace
 wsp <- CytoML::open_flowjo_xml(
-  file.path(analysis_dir, "gating_strategy.wsp"))
+  file.path(analysis_dir, paste0("gating_strategy.wsp")))
 
 # parse the flowJo workspace
 gates <- CytoML::flowjo_to_gatingset(wsp,
@@ -469,8 +476,7 @@ gate_names <- flowWorkspace::gs_get_pop_paths(gates, path = "auto")
 celltypes_of_interest <- gate_names[-c(1, 3, 10, 14, 15, 18, 19, 20, 26, 28)]
 
 # get gating matrix for analyzed cells
-gatingMatrix <- flowWorkspace::gh_pop_get_indices_mat(gh = gates, 
-                                                      y = gate_names)
+gatingMatrix <- flowWorkspace::gh_pop_get_indices_mat(gates, gate_names)
 
 # get the vector of the cell names for the sellected gates
 gating_labels <- manual_labels(gatingMatrix, celltypes_of_interest)
