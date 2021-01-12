@@ -123,19 +123,16 @@ for (file in files) {
   ff <- read.FCS(filename = file, 
                  transformation = FALSE)
   
-  # norm_not_na <- which(apply(ff_t@exprs, 1, function(x){all(!is.na(x))}))
-  # ff_t <- ff_t[norm_not_na, ]
-  
   # clean Flow Rate and signal instability
   ff <- clean_flow_rate(flow_frame = ff, 
                         out_dir = clean_dir, 
                         to_plot = TRUE)
   
   # clean Signal 
-  ff <- clean_signal(flow_frame = ff, 
-                     to_plot = "All", 
-                     out_dir = clean_dir, 
-                     arcsine_transform = TRUE, 
+  ff <- clean_signal(flow_frame = ff,
+                     to_plot = "Flagged Only",
+                     out_dir = clean_dir,
+                     arcsine_transform = TRUE,
                      non_used_bead_ch = "140")
 
   # Write FCS files

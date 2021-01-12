@@ -1,6 +1,6 @@
 
 if (!requireNamespace("BiocManager", quietly = TRUE)){
-  BiocManager::install(version="3.11")
+  BiocManager::install(version="3.12")
 }
   
 if(!require("FlowRepositoryR")){
@@ -60,10 +60,12 @@ if(!require("flowAI")){
 # TODOD check if yiou can install in the version 4 in r oit worked for Katrin by github
 
 if(!require("flowCut")){
-  BiocManager::install(version='devel')
   BiocManager::install("flowCut")
   library(flowCut)
+  
 }
+
+
 
 if(!require("stringr")){
   install.packages("stringr")
@@ -122,5 +124,4 @@ if (!require("pals")) {
   library(pals)
 }
 
-BiocManager::install("flowWorkspace")
 

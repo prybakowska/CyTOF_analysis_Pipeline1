@@ -214,6 +214,7 @@ clean_signal <- function(flow_frame,
 baseline_file <- function(fcs_files, beads = "dvs", to_plot = FALSE, 
                        out_dir = getw(), k = 80, ncells = 25000, ...){
 
+  set.seed(1)
   ff <- AggregateFlowFrames(fileNames = fcs_files, 
                             cTotal = length(fcs_files)*ncells)
   
