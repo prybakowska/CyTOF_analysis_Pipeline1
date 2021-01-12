@@ -1,11 +1,24 @@
 
-if (!requireNamespace("BiocManager", quietly = TRUE)){
-  BiocManager::install(version="3.11")
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+
+if(!require("FlowRepositoryR")){
+  BiocManager::install("BiocVersion")
 }
-  
+
 if(!require("FlowRepositoryR")){
   BiocManager::install("FlowRepositoryR")
   library(FlowRepositoryR)
+}
+
+if(!require("devtools")){
+  install.packages("devtools")
+  library(devtools)
+}
+
+if(!require("SingleCellExperiment")){
+  BiocManager::install("SingleCellExperiment")
+  library(SingleCellExperiment)
 }
 
 if(!require("CATALYST")){
@@ -28,10 +41,6 @@ if(!require("FlowSOM")){
   library(FlowSOM)
 }
 
-if(!require("SingleCellExperiment")){
-  BiocManager::install("SingleCellExperiment")
-  library(SingleCellExperiment)
-}
 
 if(!require("ggplot2")){
   install.packages("ggplot2")
@@ -53,26 +62,15 @@ if(!require("flowAI")){
   library(flowAI)
 }
 
-# if(!require("devel")){
-#   BiocManager::install("devel")
-# }
-
-# TODOD check if yiou can install in the version 4 in r oit worked for Katrin by github
 
 if(!require("flowCut")){
-  BiocManager::install(version='devel')
-  BiocManager::install("flowCut")
+  devtools::install_github("jmeskas/flowCut")
   library(flowCut)
 }
 
 if(!require("stringr")){
   install.packages("stringr")
   library(stringr)
-}
-
-if(!require("devtools")){
-  install.packages("devtools")
-  library(devtools)
 }
 
 if(!require("cytutils")){
@@ -111,6 +109,11 @@ if (!require("ggpubr")) {
   library(ggpubr)
 }
 
+if (!require("flowWorkspace")) {
+  BiocManager::install("flowWorkspace")
+  library(flowWorkspace)
+}
+
 if (!require("CytoML")) {
   BiocManager::install("CytoML")
   library(CytoML)
@@ -122,5 +125,5 @@ if (!require("pals")) {
   library(pals)
 }
 
-BiocManager::install("flowWorkspace")
+
 

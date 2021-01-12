@@ -111,7 +111,7 @@ plot_flowrate <- function (FlowRateQC)
 #' event tha will be removed form the data. 
 #' @param UseOnlyWorstChannels as in flowCut, logical, automated detection of the 
 #' worst channel that will be used for cleaninig 
-#' @param AllowFlaggedRerun as in flowCut, logical, specigy if flowCut will run
+#' @param AllowFlaggedRerun as in flowCut, logical, specify if flowCut will run
 # second time in case the file was flagged
 #' @return Cleaned, untransformed flow frame if arcsine_transform argument
 #' set to TRUE, otherwise transformed flow frame is returned. Save plots with prefix
@@ -209,11 +209,12 @@ clean_signal <- function(flow_frame,
 #' @param ... Additional arguments to pass to normCytof
 #' @param ncells number of cells to be aggregated per each file, 
 #' default is set to 25000, so around 250 beads can be aggregated per each file 
-#' @return returns reference flow frame 
+#' @return returns reference, aggregated flow frame 
 
 baseline_file <- function(fcs_files, beads = "dvs", to_plot = FALSE, 
                        out_dir = getw(), k = 80, ncells = 25000, ...){
 
+  set.seed(1)
   ff <- AggregateFlowFrames(fileNames = fcs_files, 
                             cTotal = length(fcs_files)*ncells)
   
@@ -439,8 +440,6 @@ plot_marker_quantiles <- function(files_before_norm,
     }
   }
   
-  #TODO how to do it automaticly so it removes letter just before the fcs and the file names is the same 
-  
   if(is.null(uncommon_prefix)){
     quantiles$Sample <- gsub("Norm_", "", 
                              gsub("_CC_gated.fcs|_gated.fcs|_beadNorm.fcs|.FCS|.fcs",
@@ -505,7 +504,7 @@ plot_marker_quantiles <- function(files_before_norm,
 #' @param batch Character, Character, aqusition batch for each fcs file..
 #' Pass to FlowSOM plot name, defult is set to NULL
 #' @param arcsine_transform Logical, if the data should be transformed with 
-#' arcsine transformation and cofactor 5.
+#' arcsine transformation and cofactor 5. Default set to TRUE.
 #' @return fsom object
 
 fsom_aof <- function(fcs_files, 
@@ -516,7 +515,7 @@ fsom_aof <- function(fcs_files,
                      nClus = 10,
                      out_dir, 
                      batch = NULL,
-                     arcsine_transform){
+                     arcsine_transform = TRUE){
   
   
   if(check(phenotyping_channels) == 0){
@@ -1230,20 +1229,27 @@ plot_batch <- function(files_before_norm ,
     cl_markers <- paste(clustering_markers, collapse="|")
     cl_markers <- grep(cl_markers, markers, value = T)
     
-    ff_agg@exprs[, names(cl_markers)] <- apply(ff_agg@exprs[, names(cl_markers)], 2, function(x){
+    ff_agg@exprs[, names(cl_markers)] <- apply(ff_agg@exprs[, names(cl_markers)], 
+                                               2, function(x){
       q <- quantile(x, 0.9999)
       x[x > q] <- q
       x
     })
     
+    # n <- length(files_list[[name]]) * cells_total
+    # 
+    set.seed(1)
+    samp <- length(files_list[[name]])
+    ff_samp <- ff_agg@exprs[sample(nrow(ff_agg@exprs), samp*cells_total), ]
+    
     set.seed(123)
-    dimred_res <- uwot::umap(X = ff_agg@exprs[, names(cl_markers)], 
+    dimred_res <- uwot::umap(X = ff_samp[, names(cl_markers)], 
                              n_neighbors = 15, scale = TRUE)
     
     dimred_df <- data.frame(dim1 = dimred_res[,1], dim2= dimred_res[,2],
-                            ff_agg@exprs[, names(cl_markers)])
+                            ff_samp[, names(cl_markers)])
     
-    dimred_df$file_id <- ff_agg@exprs[,"File2"]
+    dimred_df$file_id <- ff_samp[,"File2"]
     dimred_df$batch <- NA
     
     for (i in 1:length(files_list[[name]])){
@@ -1261,7 +1267,8 @@ plot_batch <- function(files_before_norm ,
                                             size = 2, linetype = "solid"),
             panel.grid.major = element_blank(),
             panel.grid.minor = element_blank(),
-            plot.subtitle = element_text(color="black", size=26, hjust = 0.95, face = "bold"),
+            plot.subtitle = element_text(color="black", size=26, 
+                                         hjust = 0.95, face = "bold"),
             axis.text = element_text(size = 24, colour = "black"),
             axis.title = element_text(size = 20, colour = "black"), 
             strip.text.x = element_text(size = 23, color = "black"),
@@ -1275,7 +1282,7 @@ plot_batch <- function(files_before_norm ,
     if (!is.null(manual_colors)){
       p <- p+scale_color_manual(values = manual_colors)
     }  
-  
+    
     plots[[name]] <- p
     
   }
