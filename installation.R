@@ -1,8 +1,4 @@
 
-if (!requireNamespace("BiocManager", quietly = TRUE)){
-  BiocManager::install(version="3.12")
-  }
-
 if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 
@@ -68,12 +64,9 @@ if(!require("flowAI")){
 
 
 if(!require("flowCut")){
-
-  BiocManager::install("flowCut")
+  devtools::install_github("jmeskas/flowCut")
   library(flowCut)
 }
-
-
 
 if(!require("stringr")){
   install.packages("stringr")
@@ -131,4 +124,6 @@ if (!require("pals")) {
   install.packages("pals")
   library(pals)
 }
+
+
 
