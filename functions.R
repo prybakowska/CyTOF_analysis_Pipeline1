@@ -24,7 +24,7 @@ find_mass_ch <- function(flow_frame,
 #' only if argument to_plot = TRUE, default is set to working directory.
 #' @param alpha numeric, as in flow_auto_qc {flowAI}. The statistical 
 #' significance level used to accept anomalies. The default value is 0.01.
-#' @return Cleand, untransformed flow frame and save the plot _beadNorm_flowAI.png
+#' @return Clean, untransformed flow frame and save the plot _beadNorm_flowAI.png
 #'  in out_dir 
 
 clean_flow_rate <- function(flow_frame, to_plot = TRUE, 
@@ -214,7 +214,7 @@ clean_signal <- function(flow_frame,
 baseline_file <- function(fcs_files, beads = "dvs", to_plot = FALSE, 
                        out_dir = getw(), k = 80, ncells = 25000, ...){
 
-  set.seed(1)
+  set.seed(2)
   ff <- AggregateFlowFrames(fileNames = fcs_files, 
                             cTotal = length(fcs_files)*ncells)
   
@@ -1236,8 +1236,6 @@ plot_batch <- function(files_before_norm ,
       x
     })
     
-    # n <- length(files_list[[name]]) * cells_total
-    # 
     set.seed(1)
     samp <- length(files_list[[name]])
     ff_samp <- ff_agg@exprs[sample(nrow(ff_agg@exprs), samp*cells_total), ]
@@ -1260,7 +1258,7 @@ plot_batch <- function(files_before_norm ,
     }
     
     p <- ggplot(dimred_df,  aes_string(x = "dim1", y = "dim2", color = "batch")) +
-      geom_point(aes(color = batch), size = 1, position="jitter") +
+      geom_point(aes(color = batch), size = 2, position="jitter") +
       ggtitle(name)+
       guides(color = guide_legend(override.aes = list(size = 5)))+
       theme(panel.background = element_rect(fill = "white", colour = "black",

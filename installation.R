@@ -37,7 +37,6 @@ if(!require("FlowSOM")){
   library(FlowSOM)
 }
 
-
 if(!require("ggplot2")){
   install.packages("ggplot2")
   library(ggplot2)

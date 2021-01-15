@@ -7,7 +7,7 @@ source('installation.R')
 source('functions.R')
 
 # create data folder where all analysis will be stored
-dir.create("data")
+if(!dir.exists("data")) dir.create("data")
 
 # set it as a main directory 
 dir <- file.path(getwd(), "data")
@@ -130,7 +130,7 @@ for (file in files) {
   
   # clean Signal 
   ff <- clean_signal(flow_frame = ff,
-                     to_plot = "Flagged Only",
+                     to_plot = "All",
                      out_dir = clean_dir,
                      arcsine_transform = TRUE,
                      non_used_bead_ch = "140")
@@ -195,8 +195,8 @@ fcs_files_clean <- files[basename(files) %in% good_files]
 file_batch_id <- stringr::str_match(basename(fcs_files_clean), 
                                     "(day[0-9]*).*.fcs")[,2]
 
-# Read in meta data 
-md <- read.csv(file.path(dir, "meta_data.csv"))
+# Read in metadata 
+md <- read.csv(file.path(dir, "RawFiles", "meta_data.csv"))
 
 # read in barcode key 
 sample_key <- CATALYST::sample_key
@@ -213,7 +213,7 @@ for (batch in unique(file_batch_id)){
 #                       "day2" = rownames(sample_key)[c(6:17)],
 #                       "day3" = rownames(sample_key)[c(8:19)])
 
-# Deabarcode files 
+# Debarcode files 
 debarcode_files(fcs_files = fcs_files_clean, 
                 out_dir = debarcode_dir, 
                 min_threshold = TRUE, 
@@ -239,7 +239,7 @@ aggregate_dir <- file.path(dir, "Aggregated")
 if(!dir.exists(aggregate_dir))(dir.create(aggregate_dir))
 
 # Bring metadata 
-md <- read.csv(file.path(dir, "meta_data.csv"))
+md <- read.csv(file.path(dir, "RawFiles", "meta_data.csv"))
 
 # assign barcodes names the to barcodes 
 md$barcode_name <- paste0(rownames(sample_key)[md$BARCODE])
@@ -459,7 +459,7 @@ saveRDS(UMAP_res,
 # copy "gating_strategy.wsp" file from RawFiles to Analysis folder so the workspace 
 # is in the same place as generated aggregated file called: "aggregated_for_UMAP_analysis.fcs"
 
-file.copy(file.path(raw_data_dir,"gating_strategy.wsp"), analysis_dir)
+file.copy(file.path(dir, "RawFiles","gating_strategy.wsp"), analysis_dir)
 
 # open flowJo workspace
 wsp <- CytoML::open_flowjo_xml(
@@ -521,9 +521,7 @@ for(m in markers_to_plot){
           panel.grid.minor = element_blank(),
           plot.subtitle = element_text(color="black", size=26, hjust = 0.95, face = "bold"),
           axis.text = element_text(size = 24, colour = "black"),
-          # axis.title = element_text(size = 20, colour = "black"), 
           axis.title = element_blank(),
-          # strip.text.x = element_text(size = 23, color = "black"),
           strip.text.x = element_blank(),
           strip.background = element_rect(fill = "white"), 
           legend.text = element_text(size = 16), 
@@ -535,9 +533,9 @@ for(m in markers_to_plot){
 
 # print the plots and save them 
 ggarrange(plotlist = plots, 
-          ncol = 3, 
-          nrow = 8)
-ggsave(filename = "marker_expressions_in_UMAP.png", device = "png", 
+          ncol = 1, 
+          nrow = 3)
+ggsave(filename = "marker_expressions_in_UMAP_cyt.png", device = "png", 
        path = analysis_dir, 
        width = 18, 
        height = 20)
@@ -545,11 +543,11 @@ ggsave(filename = "marker_expressions_in_UMAP.png", device = "png",
 # select number of colors equal to the number of cell populations
 n <- length(unique(df$cell_labels))
 myColors <- pals::glasbey(n = n)
-#  asign population names to the color
+#  assign population names to the color
 names(myColors) <- unique(df$cell_labels)
 #  for better visualization change color for Unknown population to white
 myColors["Unknown"] <- "white"
-#  set seed to get reprocucible results
+#  set seed to get reproducible results
 set.seed(20)
 # plot manual labels on UMAP, subset the number of cells for easier interpretation 
 df %>% dplyr::sample_n(size = 8000) %>%
@@ -557,9 +555,6 @@ df %>% dplyr::sample_n(size = 8000) %>%
   geom_point(size = 5, pch = 21) +
   scale_fill_manual(values = myColors)+
   guides(fill = guide_legend(ncol = 1)) +
-  # facet_wrap("indyvidual") +
-  # scale_color_gradientn(markers_to_plot[markers_to_plot == m], 
-  #                       colours = colorRampPalette(rev(brewer.pal(n = 11, name = "Spectral")))(50))  +
   theme(panel.background = element_rect(fill = "white", colour = "black",
                                         size = 2, linetype = "solid"),
         panel.grid.major = element_blank(),
@@ -576,9 +571,7 @@ df %>% dplyr::sample_n(size = 8000) %>%
 
 # save the plot 
 ggsave(filename = "manual_labels_UMAP.png", device = "png", 
-       path = analysis_dir, width = 18, height = 20)
-
-# gating_labels <- readRDS(file.path(dir, "gating_labels.RDS"))
+       path = analysis_dir, width = 11, height = 9)
 
 
 
