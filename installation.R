@@ -120,5 +120,9 @@ if (!require("pals")) {
   library(pals)
 }
 
+if (!require("scales")) {
+  install.packages("scales")
+  library(scales)
+}
 
 

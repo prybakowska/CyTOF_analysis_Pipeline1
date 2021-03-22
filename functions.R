@@ -9,7 +9,7 @@ check <- function(x) tryCatch(if(class(x) == 'logical') 1 else 1,
                               error=function(e) 0)
 
 find_mass_ch <- function(flow_frame, 
-                         channels = "Time|Event_length|Center|Offset|Width|Residual",
+                         channels = "Time|Event_length|Center|Offset|Width|Residual|SSC|FSC",
                          ...){
   non_mass_ch <- grep(c(channels), 
        colnames(flow_frame), 
@@ -24,17 +24,32 @@ find_mass_ch <- function(flow_frame,
 #' only if argument to_plot = TRUE, default is set to working directory.
 #' @param alpha numeric, as in flow_auto_qc {flowAI}. The statistical 
 #' significance level used to accept anomalies. The default value is 0.01.
+#' @param data_type Character, if MC (mass cytometry) of FC (flow cytometry) data 
+#' are analyzed
 #' @return Clean, untransformed flow frame and save the plot _beadNorm_flowAI.png
 #'  in out_dir 
 
 clean_flow_rate <- function(flow_frame, to_plot = TRUE, 
-                            out_dir = getwd(), alpha = 0.01) {
+                            out_dir = getwd(), alpha = 0.01, data_type = "MC") {
   
-  flow_frame@exprs[, "Time"] <- flow_frame@exprs[, "Time"]/100
+  if (data_type == "MC"){
+    time_division <- 100
+    timestep <- 0.01
+  } else if (data_type == "FC") {
+    time_division <- 1
+    word <- which(grepl("TIMESTEP", names(keyword(flowSet(ff)[[1]])), 
+                        ignore.case = TRUE))
+    timestep <- as.numeric(keyword(flowSet(ff)[[1]])[[word[1]]])
+  } else{
+    stop("type of data MC or FC needs to be specify")
+  }
+  
+  
+  flow_frame@exprs[, "Time"] <- flow_frame@exprs[, "Time"]/time_division
   
   FlowRateData <- flowAI:::flow_rate_bin(flow_frame, 
                                          timeCh = "Time", 
-                                         timestep = 0.01)
+                                         timestep = timestep)
   
   FlowRateQC <- flowAI:::flow_rate_check(flow_frame, 
                                          FlowRateData, 
@@ -53,14 +68,16 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
                        basename(flow_frame@description$FILENAME))),
         width = 800,
         height = 600)
-    FlowRateQC$res_fr_QC[,1] <- 0.01
-    p <- plot_flowrate(FlowRateQC)
+    if(data_type == "MC"){
+      FlowRateQC$res_fr_QC[,1] <- timestep
+    }
+    p <- plot_flowrate(FlowRateQC, data_type = data_type)
     print(p)
     dev.off()
   }
   
   flow_frame_cl <- flow_frame[FlowRateQC$goodCellIDs,]
-  flow_frame_cl@exprs[,"Time"] <- flow_frame_cl@exprs[,"Time"]*100
+  flow_frame_cl@exprs[,"Time"] <- flow_frame_cl@exprs[,"Time"]*time_division
 
   return(flow_frame_cl)
 }
@@ -69,8 +86,13 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
 #' @param FlowRateQC list obtained using flowAI:::flow_rate_check function
 #' @return xgraph plot 
 
-plot_flowrate <- function (FlowRateQC) 
+plot_flowrate <- function (FlowRateQC, data_type = "MC") 
 {
+  if (data_type == "MC"){
+    lab <- "Time (10 * Seconds)"
+  } else {
+    lab <- "Time (Seconds)"
+  }
   second_fraction <- FlowRateQC$res_fr_QC$second_fraction
   num_obs = FlowRateQC$res_fr_QC$num_obs
   frequencies = as.data.frame(FlowRateQC$frequencies)
@@ -81,8 +103,8 @@ plot_flowrate <- function (FlowRateQC)
     theme_bw() + theme(panel.grid.major = element_blank(), 
                        panel.grid.minor = element_blank(), text = element_text(size = 34)) + 
     geom_line(colour = "darkblue")
-  xgraph <- xgraph + labs(x = "Time (10 * Seconds)", y = paste0("Number of events per 1/", 
-                                                                1/second_fraction, " of a second"))
+   xgraph <- xgraph + labs(x = lab, y = paste0("Number of events per 1/", 
+                                                                 1/second_fraction, " of a second"))
   if (!is.null(anoms_points)) {
     xgraph <- xgraph + geom_point(data = anoms_points, aes_string(x = "sec_anom", 
                                                                   y = "count_anom"), 
@@ -120,21 +142,33 @@ plot_flowrate <- function (FlowRateQC)
 clean_signal <- function(flow_frame, 
                          channels_to_clean = NULL, 
                          to_plot = "All", 
+                         Segment = 1000,
                          out_dir = getwd(), 
                          arcsine_transform = TRUE, 
                          non_used_bead_ch = NULL, 
                          MaxPercCut = 0.5,
                          UseOnlyWorstChannels = TRUE,
                          AllowFlaggedRerun = TRUE,
+                         data_type = "MC",
                          ...){
   
   channels_to_transform <- find_mass_ch(flow_frame, value = FALSE)
   
   if (arcsine_transform == TRUE){
-
-    ff_t <- transform(flow_frame, 
-                      transformList(colnames(flow_frame)[channels_to_transform], 
-                                    CytoNorm::cytofTransform))
+    
+    if(data_type == "MC"){
+      ff_t <- transform(flow_frame, 
+                        transformList(colnames(flow_frame)[channels_to_transform], 
+                                      CytoNorm::cytofTransform))
+    } else if (data_type == "FC"){
+      ff_t <- transform(flow_frame, 
+                        transformList(colnames(flow_frame)[channels_to_transform], 
+                                      arcsinhTransform(a = 0, b = 1/150, c = 0))) 
+      
+    } else {
+      stop("specify data type MC or FC")
+    }
+    
   } else {
     ff_t <- flow_frame
   }
@@ -170,7 +204,7 @@ clean_signal <- function(flow_frame,
   }
   
   cleaned_data <- flowCut(f = ff_t, 
-                          Segment = 1000, 
+                          Segment = Segment, 
                           MaxPercCut = MaxPercCut, 
                           Channels = channels,
                           FileID = gsub("_beadNorm", "_flowCutCleaned", 
@@ -179,7 +213,7 @@ clean_signal <- function(flow_frame,
                           Directory = out_dir,
                           UseOnlyWorstChannels = UseOnlyWorstChannels,
                           AllowFlaggedRerun = AllowFlaggedRerun,
-                          AlwaysClean = TRUE, ...)
+                          AlwaysClean = TRUE)
   
   ff_t_clean <- cleaned_data$frame
   
@@ -404,7 +438,7 @@ plot_marker_quantiles <- function(files_before_norm,
     }
   }
   
-  quantile_values <-  c(0.05, 0.25, 0.5, 0.75, 0.95)
+  quantile_values <-  c(0.01, 0.25, 0.5, 0.75, 0.99)
   quantiles <- expand.grid(File = tmp,
                            Marker = norm_markers,
                            Quantile = quantile_values,
@@ -1258,7 +1292,7 @@ plot_batch <- function(files_before_norm ,
     }
     
     p <- ggplot(dimred_df,  aes_string(x = "dim1", y = "dim2", color = "batch")) +
-      geom_point(aes(color = batch), size = 2, position="jitter") +
+      geom_point(aes(color = batch), size = 3, position="jitter") +
       ggtitle(name)+
       guides(color = guide_legend(override.aes = list(size = 5)))+
       theme(panel.background = element_rect(fill = "white", colour = "black",
@@ -1267,8 +1301,9 @@ plot_batch <- function(files_before_norm ,
             panel.grid.minor = element_blank(),
             plot.subtitle = element_text(color="black", size=26, 
                                          hjust = 0.95, face = "bold"),
-            axis.text = element_text(size = 24, colour = "black"),
-            axis.title = element_text(size = 20, colour = "black"), 
+            axis.text = element_blank(),
+            axis.title = element_blank(), 
+            axis.ticks = element_blank(),
             strip.text.x = element_text(size = 23, color = "black"),
             strip.background = element_rect(fill = "white"), 
             legend.text = element_text(size = 18), 
@@ -1394,6 +1429,214 @@ manual_labels <- function (manual_matrix, cell_types)
   manual <- factor(manual, levels = c("Unknown", cell_types))
   return(manual)
 }
+
+#'@description Calculates breaks for flow frame splitting
+make_breaks <- function(event_per_flow_frame, total_events){
+  breaks <- split_flowFrames(seq_len(total_events),
+                             event_per_flow_frame)
+  
+  names(breaks) <- seq_along(breaks)
+  
+  return(list("breaks"=breaks, "events_per_flowframe"=event_per_flow_frame))
+}
+
+#'@description Calculates begining and end of each flow frame
+split_flowFrames <- function(vec, seg.length) {
+  starts=seq(1, length(vec), by=seg.length)
+  ends  = starts + seg.length - 1
+  ends[ends > length(vec)]=length(vec)
+  
+  lapply(seq_along(starts), function(i) vec[starts[i]:ends[i]])
+}
+
+#' @description Split the big flow frames into smaller ones
+#' @param flow_frame flow frame
+#' @param event_per_flow_frame numeric, the number of events to be split to 
+#' small flow frames, default is set to 500 000  
+#' @param total_events numeric, total events in the flow frame, can be calculated by 
+#' nrow(flow_frame)
+#' @param out_dir Character, pathway to where the files should be saved, 
+#' default is set to working directory.
+
+split_big_flowFrames <- function(flow_frame, 
+                                 event_per_flow_frame = 500000, 
+                                 total_events, 
+                                 out_dir = getwd()){
+  
+  res_breaks <- make_breaks(event_per_flow_frame, total_events)
+  
+  for (i in as.numeric((names(res_breaks$breaks)))) {
+    id <- res_breaks$breaks[[i]]
+    
+    if (i < 10) {
+      num <- paste0("0", i)       
+    }
+    write.FCS(flow_frame[id, ], 
+              file.path(out_dir, gsub(".fcs|.FCS", 
+                                      paste0("_", num, ".fcs"), flow_frame@description$ORIGINALGUID)))      
+  }    
+}
+
+
+#' @description performs FlowSOM clustering and extracts cluster and metacluster 
+#' frequency and MSI 
+#' @param file_list list, pathway to the files before and after normalization 
+#' @param nCells Numeric, number of cells to be cluster per each file, 
+#' default is set to 50 000
+#' @param phenotyping_markers Character vector, marker names to be used for clustering,
+#' can be full marker name e.g. "CD45" or "CD" if all CD-markers needs to be plotted
+#' @param functional_markers Character vector, marker names to be used for 
+#' functional markers, can be full marker name e.g. "IL-6" or "IL" if all IL-markers needs to be plotted
+#' @param xdim Numeric, parameter to pass to FlowSOM, width of the SOM grid, 
+#' default is set to 10
+#' @param ydim Numeric, parameter to pass to FlowSOM, geight of the SOM grid,
+#' default is set to 10
+#' @param n_metaclusters Numeric, exact number of clusters for metaclustering, 
+#' default is set to 35
+#' @param out_dir Character, pathway to where the FlowSOM clustering plot should
+#'  be saved, default is set to working directory.
+#' @seed seed to be et to obtain reproducible results, default is set to 789
+#' @arcsine_transform arcsine_transform Logical, if the data should be transformed with 
+#' arcsine transformation and cofactor 5, default is set to TRUE
+
+extract_pctgs_msi_per_flowsom <- function(file_list, 
+                                          nCells = 50000, 
+                                          phenotyping_markers = c("CD", "HLA", "IgD"), 
+                                          functional_markers = NULL,
+                                          xdim = 10, 
+                                          ydim = 10, 
+                                          n_metaclusters = 35,
+                                          out_dir = getwd(), 
+                                          seed = 789, 
+                                          arcsine_transform = TRUE) {
+  
+  res <- list()
+  for (f in names(all_fils)){
+
+    nCells <- length(all_fils[[f]]) * 50000
+    print(paste("aggregating files for", f, "normalization"))
+    set.seed(123)
+    ff_agg <- AggregateFlowFrames(fileNames = all_fils[[f]],
+                                  cTotal = nCells,
+                                  writeOutput = F,
+                                  outputFile = file.path(out_dir, paste0(f, "_flowsom_agg.fcs")))
+  
+    if(arcsine_transform == TRUE){
+       ff_aggt <- transform(ff_agg, 
+                         transformList(colnames(ff_agg)[grep("Di", colnames(ff_agg))], 
+                                       CytoNorm::cytofTransform))
+    } else {
+      ff_aggt <- ff_agg
+    }
+   
+    markers <- get_markers(ff_agg, colnames(ff_agg))
+    phenotyping_channels <- grep(paste(phenotyping_markers, 
+                                       collapse = ("|")), markers, value = TRUE)
+    functional_channels <- grep(paste(functional_markers, 
+                                      collapse = ("|")), markers, value = TRUE)
+    
+    # Define parameters for FlowSOM analysis
+    xdim <- xdim
+    ydim <- ydim
+    nClus <- n_metaclusters
+    s <- seed
+    
+    print(paste("building FlowSOM for", f, "normalization"))
+    fsom <- FlowSOM(ff_aggt,
+                    colsToUse = names(phenotyping_channels),
+                    scale = FALSE,
+                    nClus = nClus,
+                    seed = s,
+                    xdim = xdim,
+                    ydim = ydim)
+    
+    pdf(file.path(out_dir, paste0(f, "_FlowSOM.pdf")), height = 8, width = 15)
+    PlotStars(fsom$FlowSOM, backgroundValues = fsom$metaclustering)
+    dev.off()
+    
+    # saveRDS(fsom, file.path(flowsom_dir, paste0(f, "_flowsom_batch_effect.RDS")))
+    
+    # Define matrices for frequency (pctgs) calculation and MSI (mfi). These calculation is performed 
+    # for clusters (cl) and metaclusters (mcl)
+    cl_pctgs <- matrix(data = NA, nrow = length(all_fils[[f]]),
+                       ncol = xdim * ydim,
+                       dimnames = list(basename(all_fils[[f]]), 1:(xdim*ydim)))
+    
+    mcl_pctgs <- matrix(data = NA, nrow = length(all_fils[[f]]),
+                        ncol = nClus,
+                        dimnames = list(basename(all_fils[[f]]), 1:nClus))
+    mfi_cl_names <- apply(expand.grid(paste0("Cl", seq_len(fsom$FlowSOM$map$nNodes)),
+                                      get_markers(ff_agg, c(phenotyping_channels,functional_channels))),
+                          1, paste, collapse = "_")
+    mfi_mc_names <- apply(expand.grid(paste0("MC", 1:nClus),
+                                      get_markers(ff_agg, c(phenotyping_channels,functional_channels))),
+                          1, paste, collapse = "_")
+    mfi_cl <- matrix(NA,
+                     nrow = length(all_fils[[f]]),
+                     ncol = fsom$FlowSOM$map$nNodes * length(names(c(phenotyping_channels,functional_channels))),
+                     dimnames = list(basename(all_fils[[f]]), mfi_cl_names))
+    mfi_mcl <- matrix(NA,
+                      nrow = length(all_fils[[f]]),
+                      ncol =  length(mfi_mc_names),
+                      dimnames = list(basename(all_fils[[f]]), mfi_mc_names))
+    
+    print(paste("calculating frequency and msi for:", f, "normalization"))
+    
+    for (i in unique(fsom$FlowSOM$data[,"File2"])){
+      
+      file <- basename(all_fils[[f]][i])
+      
+      id <- which(fsom$FlowSOM$data[,"File2"] == i)
+      fsom_subset <- FlowSOM::FlowSOMSubset(fsom = fsom$FlowSOM, ids = id)
+      
+      cl_counts <- rep(0, xdim * ydim)
+      counts_tmp <- table(GetClusters(fsom_subset))
+      cl_counts[as.numeric(names(counts_tmp))] <- counts_tmp
+      
+      cl_pctgs[file,] <- (cl_counts/sum(cl_counts, na.rm = T))*100
+      
+      mcl_counts <- tapply(cl_counts, fsom$metaclustering, sum)
+      mcl_pctgs[file,] <- tapply(cl_pctgs[file,], fsom$metaclustering, sum)
+      
+      cluster_mfis <- GetMFIs(fsom_subset)
+      mfi_cl[file,] <- as.numeric(cluster_mfis[,names(c(phenotyping_channels,functional_channels))])
+      mcluster_mfis <- FlowSOM::MetaclusterMFIs(list(FlowSOM = fsom_subset,
+                                                     metaclustering = fsom$metaclustering))
+      mfi_mcl[file,] <- as.numeric(mcluster_mfis[,names(c(phenotyping_channels,functional_channels))])
+      
+    }
+    
+    # impute 0 values for NAs
+    mfi_cl_imp <- apply(mfi_cl, 2,
+                        function(x){
+                          missing <- which(is.na(x))
+                          x[missing] <- 0
+                          x
+                        })
+    
+    mfi_mcl_imp <- apply(mfi_mcl, 2,
+                         function(x){
+                           missing <- which(is.na(x))
+                           x[missing] <- 0
+                           x
+                         })
+    
+    # store the matrices in the list for convenient plotting 
+    all_mx <- list("cl_pctgs" = cl_pctgs,
+                   "mcl_pctgs" = mcl_pctgs,
+                   "mfi_cl" = mfi_cl_imp,
+                   "mfi_mcl" = mfi_mcl_imp)
+    
+    saveRDS(all_mx, file.path(out_dir, paste0(f, "_calculated_features.RDS")))
+    res[[f]] <- all_mx
+  }
+  return(res)
+}
+
+
+
+
+
 
 
 
