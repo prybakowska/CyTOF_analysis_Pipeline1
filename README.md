@@ -1,4 +1,4 @@
-# CytofPipeline1
+# Cytof_analysis_Pipeline
 
 Download from this github repository 3 files neccessary for this workflow: 
 pipeline.R, 
