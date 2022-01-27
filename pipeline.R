@@ -127,7 +127,7 @@ for (file in files) {
   ff <- clean_flow_rate(flow_frame = ff, 
                         out_dir = clean_dir, 
                         to_plot = TRUE,
-                        data_type = "FC")
+                        data_type = "MC")
   
   # clean Signal 
   ff <- clean_signal(flow_frame = ff,
@@ -135,7 +135,7 @@ for (file in files) {
                      out_dir = clean_dir,
                      Segment = 1000,
                      arcsine_transform = TRUE,
-                     data_type = "FC",
+                     data_type = "MC",
                      non_used_bead_ch = "140")
 
   # Write FCS files
@@ -430,12 +430,12 @@ plot_marker_quantiles(files_after_norm = files_after_norm,
 # Use FlowSOM to extract cell frequency and MSI
 
 # Create a list with files before and after normalization
-all_fils <- list("before" = files_before_norm,
+all_files <- list("before" = files_before_norm,
                  "after" = files_after_norm)
 
 # perform FlowSom clustering and extract cell frequency and msi per cluster and metacluster
 
-mx <- extract_pctgs_msi_per_flowsom(file_list = all_fils, 
+mx <- extract_pctgs_msi_per_flowsom(file_list = all_files, 
                                     nCells = 50000, 
                                     phenotyping_markers =  c("CD", "HLA", "IgD"),
                                     functional_markers = c("MIP", "MCP", "IL", "IFNa", "TNF", "TGF", "Gr"),

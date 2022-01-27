@@ -1511,12 +1511,12 @@ extract_pctgs_msi_per_flowsom <- function(file_list,
                                           arcsine_transform = TRUE) {
   
   res <- list()
-  for (f in names(all_fils)){
+  for (f in names(file_list)){
 
-    nCells <- length(all_fils[[f]]) * 50000
+    nCells <- length(file_list[[f]]) * 50000
     print(paste("aggregating files for", f, "normalization"))
     set.seed(123)
-    ff_agg <- AggregateFlowFrames(fileNames = all_fils[[f]],
+    ff_agg <- AggregateFlowFrames(fileNames = file_list[[f]],
                                   cTotal = nCells,
                                   writeOutput = F,
                                   outputFile = file.path(out_dir, paste0(f, "_flowsom_agg.fcs")))
@@ -1558,13 +1558,13 @@ extract_pctgs_msi_per_flowsom <- function(file_list,
     
     # Define matrices for frequency (pctgs) calculation and MSI (mfi). These calculation is performed 
     # for clusters (cl) and metaclusters (mcl)
-    cl_pctgs <- matrix(data = NA, nrow = length(all_fils[[f]]),
+    cl_pctgs <- matrix(data = NA, nrow = length(file_list[[f]]),
                        ncol = xdim * ydim,
-                       dimnames = list(basename(all_fils[[f]]), 1:(xdim*ydim)))
+                       dimnames = list(basename(file_list[[f]]), 1:(xdim*ydim)))
     
-    mcl_pctgs <- matrix(data = NA, nrow = length(all_fils[[f]]),
+    mcl_pctgs <- matrix(data = NA, nrow = length(file_list[[f]]),
                         ncol = nClus,
-                        dimnames = list(basename(all_fils[[f]]), 1:nClus))
+                        dimnames = list(basename(file_list[[f]]), 1:nClus))
     mfi_cl_names <- apply(expand.grid(paste0("Cl", seq_len(fsom$FlowSOM$map$nNodes)),
                                       get_markers(ff_agg, c(phenotyping_channels,functional_channels))),
                           1, paste, collapse = "_")
@@ -1572,19 +1572,19 @@ extract_pctgs_msi_per_flowsom <- function(file_list,
                                       get_markers(ff_agg, c(phenotyping_channels,functional_channels))),
                           1, paste, collapse = "_")
     mfi_cl <- matrix(NA,
-                     nrow = length(all_fils[[f]]),
+                     nrow = length(file_list[[f]]),
                      ncol = fsom$FlowSOM$map$nNodes * length(names(c(phenotyping_channels,functional_channels))),
-                     dimnames = list(basename(all_fils[[f]]), mfi_cl_names))
+                     dimnames = list(basename(file_list[[f]]), mfi_cl_names))
     mfi_mcl <- matrix(NA,
-                      nrow = length(all_fils[[f]]),
+                      nrow = length(file_list[[f]]),
                       ncol =  length(mfi_mc_names),
-                      dimnames = list(basename(all_fils[[f]]), mfi_mc_names))
+                      dimnames = list(basename(file_list[[f]]), mfi_mc_names))
     
     print(paste("calculating frequency and msi for:", f, "normalization"))
     
     for (i in unique(fsom$FlowSOM$data[,"File2"])){
       
-      file <- basename(all_fils[[f]][i])
+      file <- basename(file_list[[f]][i])
       
       id <- which(fsom$FlowSOM$data[,"File2"] == i)
       fsom_subset <- FlowSOM::FlowSOMSubset(fsom = fsom$FlowSOM, ids = id)
