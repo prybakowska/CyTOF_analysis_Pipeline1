@@ -99,17 +99,17 @@ plot_flowrate <- function (FlowRateQC, data_type = "MC")
   anoms = as.data.frame(FlowRateQC$anoms)
   anoms_points = as.data.frame(cbind(sec_anom = frequencies$secbin[anoms$index], 
                                      count_anom = anoms$anoms))
-  xgraph <- ggplot(frequencies, aes_string(x = "secbin", y = "tbCounts")) + 
+  xgraph <- ggplot2::ggplot(frequencies, aes_string(x = "secbin", y = "tbCounts")) + 
     theme_bw() + theme(panel.grid.major = element_blank(), 
                        panel.grid.minor = element_blank(), text = element_text(size = 34)) + 
     geom_line(colour = "darkblue")
-   xgraph <- xgraph + labs(x = lab, y = paste0("Number of events per 1/", 
-                                                                 1/second_fraction, " of a second"))
+  xgraph <- xgraph + ggplot2::labs(x = lab, y = paste0("Number of events per 1/", 
+                                                       1/second_fraction, " of a second"))
   if (!is.null(anoms_points)) {
-    xgraph <- xgraph + geom_point(data = anoms_points, aes_string(x = "sec_anom", 
-                                                                  y = "count_anom"), 
-                                  color = "green4", size = 5, 
-                                  shape = 1, stroke = 3)
+    xgraph <- xgraph + ggplot2::geom_point(data = anoms_points, aes_string(x = "sec_anom", 
+                                                                           y = "count_anom"), 
+                                           color = "green4", size = 5, 
+                                           shape = 1, stroke = 3)
   }
   return(xgraph)
 }
@@ -157,13 +157,13 @@ clean_signal <- function(flow_frame,
   if (arcsine_transform == TRUE){
     
     if(data_type == "MC"){
-      ff_t <- transform(flow_frame, 
-                        transformList(colnames(flow_frame)[channels_to_transform], 
-                                      CytoNorm::cytofTransform))
+      ff_t <- flowCore::transform(flow_frame, 
+                                  transformList(colnames(flow_frame)[channels_to_transform], 
+                                                CytoNorm::cytofTransform))
     } else if (data_type == "FC"){
-      ff_t <- transform(flow_frame, 
-                        transformList(colnames(flow_frame)[channels_to_transform], 
-                                      arcsinhTransform(a = 0, b = 1/150, c = 0))) 
+      ff_t <- flowCore::transform(flow_frame, 
+                                  transformList(colnames(flow_frame)[channels_to_transform], 
+                                                arcsinhTransform(a = 0, b = 1/150, c = 0))) 
       
     } else {
       stop("specify data type MC or FC")
@@ -203,24 +203,24 @@ clean_signal <- function(flow_frame,
     dir.create(out_dir)
   }
   
-  cleaned_data <- flowCut(f = ff_t, 
-                          Segment = Segment, 
-                          MaxPercCut = MaxPercCut, 
-                          Channels = channels,
-                          FileID = gsub("_beadNorm", "_flowCutCleaned", 
-                                        basename(flow_frame@description$FILENAME)),
-                          Plot = to_plot,
-                          Directory = out_dir,
-                          UseOnlyWorstChannels = UseOnlyWorstChannels,
-                          AllowFlaggedRerun = AllowFlaggedRerun,
-                          AlwaysClean = TRUE)
+  cleaned_data <- flowCut::flowCut(f = ff_t, 
+                                   Segment = Segment, 
+                                   MaxPercCut = MaxPercCut, 
+                                   Channels = channels,
+                                   FileID = gsub("_beadNorm", "_flowCutCleaned", 
+                                                 basename(flow_frame@description$FILENAME)),
+                                   Plot = to_plot,
+                                   Directory = out_dir,
+                                   UseOnlyWorstChannels = UseOnlyWorstChannels,
+                                   AllowFlaggedRerun = AllowFlaggedRerun,
+                                   AlwaysClean = TRUE)
   
   ff_t_clean <- cleaned_data$frame
   
   if (arcsine_transform == TRUE){
-    ff_clean <- transform(ff_t_clean, 
-                          transformList(colnames(flow_frame)[channels_to_transform], 
-                                        cytofTransform.reverse))
+    ff_clean <- flowCore::transform(ff_t_clean, 
+                                    transformList(colnames(flow_frame)[channels_to_transform], 
+                                                  cytofTransform.reverse))
   } else {
     ff_clean <- ff_t_clean
   }
@@ -249,12 +249,12 @@ baseline_file <- function(fcs_files, beads = "dvs", to_plot = FALSE,
                        out_dir = getw(), k = 80, ncells = 25000, ...){
 
   set.seed(2)
-  ff <- AggregateFlowFrames(fileNames = fcs_files, 
+  ff <- FlowSOM::AggregateFlowFrames(fileNames = fcs_files, 
                             cTotal = length(fcs_files)*ncells)
   
-  dat <- prepData(ff) 
+  dat <- CATALYST::prepData(ff) 
 
-  dat_norm <- normCytof(x = dat,
+  dat_norm <- CATALYST::normCytof(x = dat,
                         beads = beads,
                         remove_beads = TRUE,
                         norm_to = NULL,
@@ -263,7 +263,7 @@ baseline_file <- function(fcs_files, beads = "dvs", to_plot = FALSE,
                         verbose = FALSE, 
                         transform = FALSE, 
                         ...)
-  ff_ref <- sce2fcs(dat_norm$beads)
+  ff_ref <- CATALYST::sce2fcs(dat_norm$beads)
   rm(ff)
   
   if (to_plot == TRUE){
@@ -273,11 +273,11 @@ baseline_file <- function(fcs_files, beads = "dvs", to_plot = FALSE,
     if(!dir.exists(plot_dir))(dir.create(plot_dir))
     
     p <- dat_norm$scatter
-    ggsave(filename = file.path(plot_dir,"RefBeadGate.png"), 
+    ggplot2::ggsave(filename = file.path(plot_dir,"RefBeadGate.png"), 
            plot = p, limitsize = FALSE)
     
     p <- dat_norm$lines
-    ggsave(filename = file.path(plot_dir,"RefBeadLines.png"), 
+    ggplot2::ggsave(filename = file.path(plot_dir,"RefBeadLines.png"), 
            plot = p, limitsize = FALSE)
   }
   return(ff_ref)
@@ -323,7 +323,7 @@ bead_normalize <- function(flow_frame,
 
     matches <- paste(markers_to_keep, collapse="|")
     
-    m_to_keep <- grep(matches, get_markers(flow_frame, colnames(flow_frame)), 
+    m_to_keep <- grep(matches, FlowSOM::GetMarkers(flow_frame, colnames(flow_frame)), 
                              ignore.case = TRUE, value = FALSE)
     
     non_mass_ch <- grep("Time|length|Ce140|151|153|165|175|Center|Offset|Width|
@@ -342,10 +342,10 @@ bead_normalize <- function(flow_frame,
        to its own bead mean but not across all files")
   }
   
-  dat <- prepData(flow_frame) 
+  dat <- CATALYST::prepData(flow_frame) 
   
   # normalize the data and remove beads
-  dat_norm <- normCytof(x = dat,
+  dat_norm <- CATALYST::normCytof(x = dat,
                         beads = beads,
                         remove_beads = remove_beads,
                         norm_to = norm_to_ref,
@@ -355,7 +355,7 @@ bead_normalize <- function(flow_frame,
                         ...)
  
   # convert back to .fcs files and save 
-  f <- sce2fcs(dat_norm$data)
+  f <- CATALYST::sce2fcs(dat_norm$data)
   
   filename <- basename(flow_frame@description$FILENAME)
   
@@ -366,11 +366,11 @@ bead_normalize <- function(flow_frame,
     if(!dir.exists(plot_dir))(dir.create(plot_dir))
     
     p <- dat_norm$scatter
-    ggsave(filename = file.path(plot_dir, gsub(".FCS|.fcs","_beadGate.png", filename)), 
+    ggplot2::ggsave(filename = file.path(plot_dir, gsub(".FCS|.fcs","_beadGate.png", filename)), 
            plot = p, limitsize = FALSE)
    
     p <- dat_norm$lines
-    ggsave(filename = file.path(plot_dir, gsub(".FCS|.fcs","_beadLines.png", filename)), 
+    ggplot2::ggsave(filename = file.path(plot_dir, gsub(".FCS|.fcs","_beadLines.png", filename)), 
            plot = p, limitsize = FALSE)
    
   }
@@ -429,12 +429,12 @@ plot_marker_quantiles <- function(files_before_norm,
       matches <- paste(markers_to_plot, collapse="|")
       
       norm_markers <- grep(matches,
-                           get_markers(ff_tmp, find_mass_ch(ff_tmp, 
+                           FlowSOM::GetMarkers(ff_tmp, find_mass_ch(ff_tmp, 
                                                             value = TRUE)), 
                            value = TRUE, ignore.case = F)
     } else {
       norm_markers <- find_mass_ch(ff_tmp, value = TRUE)
-      norm_markers <- get_markers(ff_tmp, norm_markers)
+      norm_markers <- FlowSOM::GetMarkers(ff_tmp, norm_markers)
     }
   }
   
@@ -455,12 +455,12 @@ plot_marker_quantiles <- function(files_before_norm,
     o <- capture.output(ff <- read.FCS(file.path(file)))   
     
     if(arcsine_transform == TRUE){
-      ff <- transform(ff, transformList(grep("Di", colnames(ff), value = TRUE),
+      ff <- flowCore::transform(ff, transformList(grep("Di", colnames(ff), value = TRUE),
                                         arcsinhTransform(a = 0, b = 1/5, c = 0)))
     }
     
     for (marker in names(norm_markers)) {
-      quantiles_res <- quantile(exprs(ff)[, marker],
+      quantiles_res <-stats::quantile(exprs(ff)[, marker],
                                 quantile_values)
       for (i in seq_along(quantiles_res)) {
         quantiles <- quantiles %>%
@@ -487,7 +487,7 @@ plot_marker_quantiles <- function(files_before_norm,
   
   ncols <- length(unique(quantiles$Batch))
   p <- quantiles %>% dplyr::filter(Normalization == "YES") %>%
-    ggplot(aes(x = Sample,
+    ggplot2::ggplot(aes(x = Sample,
                y = Value,
                color = Batch)) +
     geom_point(data = quantiles %>% dplyr::filter(Normalization == "NO"), 
@@ -514,13 +514,13 @@ plot_marker_quantiles <- function(files_before_norm,
           legend.position = "bottom")
   
   if (!is.null(manual_colors)){
-    p <- p + scale_colour_manual(values = c(manual_colors))
+    p <- p + ggplot2::scale_colour_manual(values = c(manual_colors))
   }
   
-  ggsave(filename = "Marker distribution across aliquots and batches.pdf", 
-         plot = p, 
-         path = file.path(out_dir), 
-         width = length(fcs_files)*0.25, height = length(norm_markers)*4, limitsize = F)
+  ggplot2::ggsave(filename = "Marker distribution across aliquots and batches.pdf", 
+                 plot = p, 
+                 path = file.path(out_dir), 
+                 width = length(fcs_files)*0.25, height = length(norm_markers)*4, limitsize = F)
 }
 
 #' @description Builds FlowSOM tree for the files scoring 
@@ -553,33 +553,38 @@ fsom_aof <- function(fcs_files,
   
   
   if(check(phenotyping_channels) == 0){
-    o <- capture.output(ff_tmp <- read.FCS(file.path(files[1])))
-    markers <- get_markers(ff_tmp, colnames(ff_tmp))
+    o <- capture.output(ff_tmp <- flowCore::read.FCS(file.path(files[1])))
+    markers <- FlowSOM::GetMarkers(ff_tmp, colnames(ff_tmp))
     phenotyping_channels <- grep(paste(phenotyping_markers, 
                                        collapse = ("|")), markers, value = TRUE)
   }
   
   if(arcsine_transform  == TRUE){
-    trans <- transformList(names(phenotyping_channels), cytofTransform)
+    trans <- transformList(names(phenotyping_channels), CytoNorm::cytofTransform)
   } else {
     trans <- NULL
   }
   
-  fsom <- prepareFlowSOM(file = fcs_files,
-                         colsToUse = names(phenotyping_channels),
-                         seed = 1, 
-                         plot = FALSE,
-                         nCells = nCells,
-                         transformList = trans,
-                         FlowSOM.params = list(xdim = xdim, 
-                                               ydim = ydim, 
-                                               nClus = nClus, 
-                                               scale = FALSE))
+  fsom <- CytoNorm::prepareFlowSOM(file = fcs_files,
+                                   colsToUse = names(phenotyping_channels),
+                                   seed = 1, 
+                                   nCells = nCells,
+                                   transformList = trans,
+                                   FlowSOM.params = list(xdim = xdim, 
+                                                         ydim = ydim, 
+                                                         nClus = nClus, 
+                                                         scale = FALSE))
   
   myCol <- c("tomato", "violet", "grey50", "slateblue1", "yellow","turquoise2",
              "yellowgreen", "skyblue", "wheat2","steelblue", "blue2", "navyblue",
              "orange", "violetred", "red4", "springgreen2",  "palegreen4",
              "tan", "tan2", "tan3", "brown", "grey70", "grey30")
+  
+  if(max(as.numeric(fsom$metaclustering)) > length(myCol)){
+    backgroundColors <- NULL
+  } else {
+    backgroundColors <- myCol
+  }
   
   if(!is.null(batch)){
     filename <- paste0(batch, "_FlowSOM_clustering.pdf")
@@ -587,11 +592,22 @@ fsom_aof <- function(fcs_files,
     filename <- "FlowSOM_clustering.pdf"
   }
   
-  pdf(file.path(out_dir, filename))
-  PlotStars(fsom$FlowSOM, main = "FlowSOM clustering", 
-            backgroundValues = fsom$metaclustering, 
-            backgroundColor = myCol)
-  dev.off()
+  # pdf(file.path(out_dir, filename), width = 14, height = 10)
+  fsomPlot <- FlowSOM::PlotStars(fsom = fsom, 
+                                 title = "FlowSOM clustering",
+                                 backgroundValues = fsom$metaclustering, 
+                                 maxNodeSize = 3,
+                                 backgroundColors = backgroundColors)
+  fsomTsne <- FlowSOM::PlotDimRed(fsom = fsom, plotFile = NULL, seed = 2, cTotal = 20000,  
+                                  title = "tSNE visualization of FlowSOM metaclusters")
+  
+  figure <- ggarrange(fsomPlot, fsomTsne,
+                      # labels = c("FlowSOM clustering", "tsne"),
+                      ncol = 2, nrow = 1)
+  
+  ggplot2::ggsave(filename = filename, plot = figure, device = "pdf", path = out_dir,
+         width =24, height = 10)
+  # dev.off()
   
   return(fsom)
 }
@@ -627,20 +643,20 @@ scaled_aof_score <- function(aof_scores, out_dir, aof_channels, batch = NULL){
       main <- name
     }
     
-    pheatmap(list_scores[[name]],
-             cluster_rows = FALSE,
-             cluster_cols = FALSE,
-             color = colorRampPalette(brewer.pal(n = 9, name =
-                                                   "YlGnBu"))(100),
-             display_numbers = TRUE,
-             labels_col = phenotyping_channels,
-             labels_row = basename(rownames(list_scores[[name]])),
-             filename = filename,
-             main = main,
-             number_format = "%.1f",
-             fontsize_number = 8,
-             number_color = "black",
-             width = 10)
+    pheatmap::pheatmap(list_scores[[name]],
+                       cluster_rows = FALSE,
+                       cluster_cols = FALSE,
+                       color = colorRampPalette(brewer.pal(n = 9, name =
+                                                             "YlGnBu"))(100),
+                       display_numbers = TRUE,
+                       labels_col = phenotyping_channels,
+                       labels_row = basename(rownames(list_scores[[name]])),
+                       filename = filename,
+                       main = main,
+                       number_format = "%.1f",
+                       fontsize_number = 8,
+                       number_color = "black",
+                       width = 10)
   }
   
   if(is.null(batch)){
@@ -673,7 +689,7 @@ aof_scoring <- function(fcs_files,
   if(check(phenotyping_channels) == 0){
     
     o <- capture.output(ff_tmp <- read.FCS(file.path(files[1])))
-    markers <- get_markers(ff_tmp, colnames(ff_tmp))
+    markers <- FlowSOM::GetMarkers(ff_tmp, colnames(ff_tmp))
     phenotyping_channels <- grep(paste(phenotyping_markers, 
                                        collapse = ("|")), markers, value = TRUE)
     
@@ -692,16 +708,16 @@ aof_scoring <- function(fcs_files,
   for(file in fcs_files){ 
     print(paste("calculating AOF", file))
     File_ID <- which(fcs_files == file)
-    idx <- which(fsom$FlowSOM$data[,"File"] == File_ID)
-    fcs_data <- fsom$FlowSOM$data[idx,]
-    MC <- fsom$metaclustering[fsom$FlowSOM$map$mapping[idx, 1]]
+    idx <- which(fsom$data[,"File"] == File_ID)
+    fcs_data <- fsom$data[idx,]
+    MC <- fsom$metaclustering[fsom$map$mapping[idx, 1]]
     
-    aof_tmp <- greedyCytometryAof(fcs_data = fcs_data, 
-                                  y = MC, 
-                                  channel_names = names(phenotyping_channels),
-                                  width = 0.05, 
-                                  cofactor = 5, 
-                                  verbose = TRUE) 
+    aof_tmp <- cytutils::greedyCytometryAof(fcs_data = fcs_data, 
+                                            y = MC, 
+                                            channel_names = names(phenotyping_channels),
+                                            width = 0.05, 
+                                            cofactor = 5, 
+                                            verbose = TRUE) 
     aof_scores[file, ] <- aof_tmp$Aof
   }
   
@@ -750,7 +766,7 @@ file_outlier_detecion <- function(scores, out_dir = getwd(), sd) {
   max_score <- max(df_scores$sample_scores)
   max_pctgs <- max_score + (max_score * 0.1)
   
-  p <- ggplot(df_scores, aes(x = file_names, y = sample_scores, color = quality)) +
+  p <- ggplot2::ggplot(df_scores, aes(x = file_names, y = sample_scores, color = quality)) +
     geom_point(size = 4) +
     scale_colour_manual(values = colors) +
     ylim(-0.5, max_pctgs) + 
@@ -769,7 +785,7 @@ file_outlier_detecion <- function(scores, out_dir = getwd(), sd) {
     scale_x_discrete(breaks = df_scores$file_names[df_scores$quality == "bad"])
   p
   
-  ggsave(filename = "Quality_AOF_score.png", plot = p, path = file.path(out_dir))
+  ggplot2::ggsave(filename = "Quality_AOF_score.png", plot = p, path = file.path(out_dir))
   
   saveRDS(df_scores, file.path(out_dir, "Quality_AOF_score.RDS"))
   write.csv(df_scores, file = file.path(out_dir, "Quality_AOF_score.csv"))
@@ -812,8 +828,10 @@ file_quality_check <- function(fcs_files,
       print(batch)
       
       files <- fcs_files[file_batch_id == batch]
-      fsom <- fsom_aof(fcs_files = files, phenotyping_markers = phenotyping_markers, 
-                       out_dir = out_dir, arcsine_transform = arcsine_transform,
+      fsom <- fsom_aof(fcs_files = files, 
+                       phenotyping_markers = phenotyping_markers, 
+                       out_dir = out_dir, 
+                       arcsine_transform = arcsine_transform,
                        batch = batch, ...)
       
       scores[[batch]] <- aof_scoring(fcs_files = files, phenotyping_markers = phenotyping_markers,
@@ -876,7 +894,7 @@ debarcode_files <- function(fcs_files,
   for (file in fcs_files){
     print(paste0("   ", Sys.time()))
     print(paste0("   Debarcoding ", file))
-    ff <- read.FCS(file, transformation = FALSE)
+    ff <- flowCore::read.FCS(file, transformation = FALSE)
      
     file_id <- which(file == fcs_files)
     batch_id <- file_batch_id[file_id]
@@ -894,11 +912,11 @@ debarcode_files <- function(fcs_files,
       s_key <- barcode_key
     }
 
-    dat <- prepData(ff)
-    dat <- assignPrelim(dat, bc_key = s_key)
+    dat <- CATALYST::prepData(ff)
+    dat <- CATALYST::assignPrelim(dat, bc_key = s_key)
     rownames(dat)[rowData(dat)$is_bc]
     # table(colData(dat)$bc_id)
-    dat <- estCutoffs(dat)
+    dat <- CATALYST::estCutoffs(dat)
     
     less_than_th <- c()
     if (min_threshold == TRUE){
@@ -922,7 +940,7 @@ debarcode_files <- function(fcs_files,
     metadata(dat)$sep_cutoffs[id] <- 1 
   
     if (to_plot == TRUE){
-      p <- plotYields(dat, which = rownames(s_key))
+      p <- CATALYST::plotYields(dat, which = rownames(s_key))
       
       pdf(file.path(out_dir, paste(gsub(".fcs", "_yields.pdf", basename(file)))))
       for (name in names(p)){
@@ -931,10 +949,10 @@ debarcode_files <- function(fcs_files,
       dev.off()
     }
     
-    dat <- applyCutoffs(dat)
+    dat <- CATALYST::applyCutoffs(dat)
     
     if (to_plot == TRUE){
-      p <- plotEvents(dat, n = 500)
+      p <- CATALYST::plotEvents(dat, n = 500)
       
       pdf(file.path(out_dir, paste(gsub(".fcs", "_debarcode_quality.pdf", 
                                         basename(file)))))
@@ -945,14 +963,14 @@ debarcode_files <- function(fcs_files,
     }
     
     dat <- dat[, dat$bc_id !=0]
-    fs <- sce2fcs(dat, split_by = "bc_id")
+    fs <- CATALYST::sce2fcs(dat, split_by = "bc_id")
   
     tmp_dir <- file.path(out_dir, batch_id)
     if(!dir.exists(tmp_dir)) dir.create(tmp_dir)
     
     file_name <- gsub("_cleaned.fcs|.fcs", "", basename(file))
     
-    write.flowSet(fs, outdir = tmp_dir, 
+    flowCore::write.flowSet(fs, outdir = tmp_dir, 
                   filename = paste0(rownames(fs@phenoData), "_", file_name, 
                                     "_debarcoded.fcs")) 
   }
@@ -1073,7 +1091,7 @@ gate_intact_cells <- function(flow_frame,
   
   if(arcsine_transform == TRUE){
     
-    ff_t <- transform(ff, 
+    ff_t <- flowCore::transform(ff, 
                       transformList(colnames(ff)[grep("Di", colnames(ff))], 
                                     CytoNorm::cytofTransform))
   } else {
@@ -1089,12 +1107,14 @@ gate_intact_cells <- function(flow_frame,
   tr <- list()
   for(m in c("Ir193Di", "Ir191Di")){
     
-    tr[[m]] <- c(deGate(ff_t, m,
-                        tinypeak.removal = tinypeak_removal1, upper = FALSE, use.upper = TRUE,
-                        alpha = alpha1, verbose = F, count.lim = 3, ...), 
-                 deGate(ff_t, m,
-                        tinypeak.removal = tinypeak_removal2, upper = TRUE, use.upper = TRUE,
-                        alpha = alpha2, verbose = F, count.lim = 3, ...)) 
+    tr[[m]] <- c(flowDensity::deGate(ff_t, m,
+                                     tinypeak.removal = tinypeak_removal1, 
+                                     upper = FALSE, use.upper = TRUE,
+                                     alpha = alpha1, verbose = F, count.lim = 3, ...), 
+                 flowDensity::deGate(ff_t, m,
+                                     tinypeak.removal = tinypeak_removal2, 
+                                     upper = TRUE, use.upper = TRUE,
+                                     alpha = alpha2, verbose = F, count.lim = 3, ...)) 
   }
   
   for(m in c("Ir193Di", "Ir191Di")){
@@ -1103,9 +1123,9 @@ gate_intact_cells <- function(flow_frame,
   }
   
   percentage <- (sum(selection)/length(selection))*100
-  plotDens(ff_t, c("Ir193Di", "Ir191Di"), 
-           main = paste0(basename(file_name)," ( ", format(round(percentage, 2), 
-                                                      nsmall = 2), "% )"))
+  flowDensity::plotDens(ff_t, c("Ir193Di", "Ir191Di"), 
+                        main = paste0(basename(file_name)," ( ", format(round(percentage, 2), 
+                                                                        nsmall = 2), "% )"))
   
   abline(h = c(tr[["Ir191Di"]]))
   abline(v = c(tr[["Ir193Di"]]))
@@ -1152,9 +1172,9 @@ gate_live_cells <- function(flow_frame,
   
   if(arcsine_transform == TRUE){
     
-    ff_t <- transform(ff, 
-                      transformList(colnames(ff)[grep("Di", colnames(ff))], 
-                                    CytoNorm::cytofTransform))
+    ff_t <- flowCore::transform(ff, 
+                                transformList(colnames(ff)[grep("Di", colnames(ff))], 
+                                              CytoNorm::cytofTransform))
   } else {
     ff_t <- ff
   }
@@ -1173,18 +1193,21 @@ gate_live_cells <- function(flow_frame,
     if (m == v_ch) {
       upper = TRUE
       alpha = alpha_viability
-      tr[[m]] <- deGate(ff_t, m,
-                        tinypeak.removal = tinypeak_removal_viability, upper = upper, use.upper = TRUE,
-                        alpha = alpha, verbose = F, count.lim = 3)
+      tr[[m]] <- flowDensity::deGate(ff_t, m,
+                                     tinypeak.removal = tinypeak_removal_viability, 
+                                     upper = upper, use.upper = TRUE,
+                                     alpha = alpha, verbose = F, count.lim = 3)
       
     } else {
       alpha = alpha_Iridium
-      tr[[m]] <- c(deGate(ff_t, m,
-                          tinypeak.removal = tinypeak_removal_Iridium, upper = FALSE, use.upper = TRUE,
-                          alpha = alpha,  verbose = F, count.lim = 3), 
-                   deGate(ff_t, m,
-                          tinypeak.removal = tinypeak_removal_Iridium, upper = TRUE, use.upper = TRUE,
-                          alpha = alpha, verbose = F, count.lim = 3)) 
+      tr[[m]] <- c(flowDensity::deGate(ff_t, m,
+                                       tinypeak.removal = tinypeak_removal_Iridium, 
+                                       upper = FALSE, use.upper = TRUE,
+                                       alpha = alpha,  verbose = F, count.lim = 3), 
+                   flowDensity::deGate(ff_t, m,
+                                       tinypeak.removal = tinypeak_removal_Iridium, 
+                                       upper = TRUE, use.upper = TRUE,
+                                       alpha = alpha, verbose = F, count.lim = 3)) 
       
     }
   }
@@ -1198,9 +1221,9 @@ gate_live_cells <- function(flow_frame,
     }
   }
   percentage <- (sum(selection[,"live"]/sum(selection)))*100  
-  plotDens(ff_t, c(v_ch, "Ir191Di"), 
-           main = paste0(file_name," ( ", format(round(percentage, 2), nsmall = 2), "% )"),
-           xlim = c(0, 8), ylim = c(0, 8))
+  flowDensity::plotDens(ff_t, c(v_ch, "Ir191Di"), 
+                        main = paste0(file_name," ( ", format(round(percentage, 2), nsmall = 2), "% )"),
+                        xlim = c(0, 8), ylim = c(0, 8))
   
   abline(h = tr[["Ir191Di"]])
   abline(v = tr[[v_ch]])
@@ -1245,20 +1268,20 @@ plot_batch <- function(files_before_norm ,
   for (name in names(files_list)) {
     
     set.seed(1)
-    ff_agg <- AggregateFlowFrames(fileNames = files_list[[name]],
-                                  cTotal = length(files_list[[name]]) * cells_total,
-                                  verbose = TRUE,
-                                  writeMeta = FALSE,
-                                  writeOutput = FALSE,
-                                  outputFile = file.path(out_dir, paste0("aggregated_for_batch_plotting.fcs")))
+    ff_agg <- FlowSOM::AggregateFlowFrames(fileNames = files_list[[name]],
+                                           cTotal = length(files_list[[name]]) * cells_total,
+                                           verbose = TRUE,
+                                           writeMeta = FALSE,
+                                           writeOutput = FALSE,
+                                           outputFile = file.path(out_dir, paste0("aggregated_for_batch_plotting.fcs")))
     
     if (arcsine_transform == TRUE){
-      ff_agg <- transform(ff_agg,
-                          transformList(grep("Di", colnames(ff_agg), value = TRUE), 
-                                        cytofTransform))
+      ff_agg <- flowCore::transform(ff_agg,
+                                    transformList(grep("Di", colnames(ff_agg), value = TRUE), 
+                                                  cytofTransform))
     }
     
-    markers <- get_markers(ff_agg, colnames(ff_agg))
+    markers <- FlowSOM::GetMarkers(ff_agg, colnames(ff_agg))
     
     cl_markers <- paste(clustering_markers, collapse="|")
     cl_markers <- grep(cl_markers, markers, value = T)
@@ -1291,7 +1314,7 @@ plot_batch <- function(files_before_norm ,
       dimred_df[dimred_df[, "file_id"] == i, "batch"] <- batch
     }
     
-    p <- ggplot(dimred_df,  aes_string(x = "dim1", y = "dim2", color = "batch")) +
+    p <- ggplot2::ggplot(dimred_df,  aes_string(x = "dim1", y = "dim2", color = "batch")) +
       geom_point(aes(color = batch), size = 3, position="jitter") +
       ggtitle(name)+
       guides(color = guide_legend(override.aes = list(size = 5)))+
@@ -1351,20 +1374,21 @@ UMAP <- function(fcs_files,
                  cells_total = 1000){
   
   set.seed(1)
-  ff_agg <- AggregateFlowFrames(fileNames = fcs_files,
-                                cTotal = length(fcs_files) * cells_total,
-                                verbose = TRUE,
-                                writeMeta = TRUE,
-                                writeOutput = TRUE,
-                                outputFile = file.path(out_dir, paste0("aggregated_for_UMAP_analysis.fcs")))
+  ff_agg <- FlowSOM::AggregateFlowFrames(fileNames = fcs_files,
+                                         cTotal = length(fcs_files) * cells_total,
+                                         verbose = TRUE,
+                                         writeMeta = TRUE,
+                                         writeOutput = TRUE,
+                                         outputFile = file.path(out_dir, paste0("aggregated_for_UMAP_analysis.fcs")))
   
   if (arcsine_transform == TRUE){
-    ff_agg <- transform(ff_agg,
-                        transformList(grep("Di", colnames(ff_agg), value = TRUE), 
-                                      cytofTransform))
+    ff_agg <- flowCore::transform(ff_agg,
+                                  transformList(grep("Di", colnames(ff_agg), 
+                                                     value = TRUE), 
+                                                CytoNorm::cytofTransform))
   }
   
-  markers <- get_markers(ff_agg, colnames(ff_agg))
+  markers <- FlowSOM::GetMarkers(ff_agg, colnames(ff_agg))
   
   cl_markers <- paste(clustering_markers, collapse="|")
   cl_markers <- grep(cl_markers, markers, value = T)
@@ -1516,20 +1540,20 @@ extract_pctgs_msi_per_flowsom <- function(file_list,
     nCells <- length(file_list[[f]]) * 50000
     print(paste("aggregating files for", f, "normalization"))
     set.seed(123)
-    ff_agg <- AggregateFlowFrames(fileNames = file_list[[f]],
+    ff_agg <- FlowSOM::AggregateFlowFrames(fileNames = file_list[[f]],
                                   cTotal = nCells,
                                   writeOutput = F,
                                   outputFile = file.path(out_dir, paste0(f, "_flowsom_agg.fcs")))
   
     if(arcsine_transform == TRUE){
-       ff_aggt <- transform(ff_agg, 
-                         transformList(colnames(ff_agg)[grep("Di", colnames(ff_agg))], 
-                                       CytoNorm::cytofTransform))
+      ff_aggt <- flowCore::transform(ff_agg, 
+                                     transformList(colnames(ff_agg)[grep("Di", colnames(ff_agg))], 
+                                                   CytoNorm::cytofTransform))
     } else {
       ff_aggt <- ff_agg
     }
    
-    markers <- get_markers(ff_agg, colnames(ff_agg))
+    markers <- FlowSOM::GetMarkers(ff_agg, colnames(ff_agg))
     phenotyping_channels <- grep(paste(phenotyping_markers, 
                                        collapse = ("|")), markers, value = TRUE)
     functional_channels <- grep(paste(functional_markers, 
@@ -1542,19 +1566,23 @@ extract_pctgs_msi_per_flowsom <- function(file_list,
     s <- seed
     
     print(paste("building FlowSOM for", f, "normalization"))
-    fsom <- FlowSOM(ff_aggt,
-                    colsToUse = names(phenotyping_channels),
-                    scale = FALSE,
-                    nClus = nClus,
-                    seed = s,
-                    xdim = xdim,
-                    ydim = ydim)
+    fsom <- FlowSOM::FlowSOM(ff_aggt,
+                             colsToUse = names(phenotyping_channels),
+                             scale = FALSE,
+                             nClus = nClus,
+                             seed = s,
+                             xdim = xdim,
+                             ydim = ydim)
     
-    pdf(file.path(out_dir, paste0(f, "_FlowSOM.pdf")), height = 8, width = 15)
-    PlotStars(fsom$FlowSOM, backgroundValues = fsom$metaclustering)
-    dev.off()
+    fsomPlot <- FlowSOM::PlotStars(fsom, backgroundValues = fsom$metaclustering)
+    fsomTsne <- FlowSOM::PlotDimRed(fsom = fsom, cTotal = 5000, seed = 2)
     
-    # saveRDS(fsom, file.path(flowsom_dir, paste0(f, "_flowsom_batch_effect.RDS")))
+    figure <- ggarrange(fsomPlot, fsomTsne,
+                        # labels = c("FlowSOM clustering", "tsne"),
+                        ncol = 2, nrow = 1)
+    
+    ggplot2::ggsave(filename = paste0(f, "_FlowSOM.pdf"), plot = figure, device = "pdf", path = out_dir,
+           width =24, height = 10)
     
     # Define matrices for frequency (pctgs) calculation and MSI (mfi). These calculation is performed 
     # for clusters (cl) and metaclusters (mcl)
@@ -1565,15 +1593,16 @@ extract_pctgs_msi_per_flowsom <- function(file_list,
     mcl_pctgs <- matrix(data = NA, nrow = length(file_list[[f]]),
                         ncol = nClus,
                         dimnames = list(basename(file_list[[f]]), 1:nClus))
-    mfi_cl_names <- apply(expand.grid(paste0("Cl", seq_len(fsom$FlowSOM$map$nNodes)),
-                                      get_markers(ff_agg, c(phenotyping_channels,functional_channels))),
+    mfi_cl_names <- apply(expand.grid(paste0("Cl", seq_len(fsom$map$nNodes)),
+                                      FlowSOM::GetMarkers(ff_agg, c(phenotyping_channels,functional_channels))),
                           1, paste, collapse = "_")
     mfi_mc_names <- apply(expand.grid(paste0("MC", 1:nClus),
-                                      get_markers(ff_agg, c(phenotyping_channels,functional_channels))),
+                                      FlowSOM::GetMarkers(ff_agg, c(phenotyping_channels,functional_channels))),
                           1, paste, collapse = "_")
     mfi_cl <- matrix(NA,
                      nrow = length(file_list[[f]]),
-                     ncol = fsom$FlowSOM$map$nNodes * length(names(c(phenotyping_channels,functional_channels))),
+                     ncol = fsom$map$nNodes * length(names(c(phenotyping_channels,
+                                                             functional_channels))),
                      dimnames = list(basename(file_list[[f]]), mfi_cl_names))
     mfi_mcl <- matrix(NA,
                       nrow = length(file_list[[f]]),
@@ -1582,15 +1611,15 @@ extract_pctgs_msi_per_flowsom <- function(file_list,
     
     print(paste("calculating frequency and msi for:", f, "normalization"))
     
-    for (i in unique(fsom$FlowSOM$data[,"File2"])){
+    for (i in unique(fsom$data[,"File2"])){
       
       file <- basename(file_list[[f]][i])
       
-      id <- which(fsom$FlowSOM$data[,"File2"] == i)
-      fsom_subset <- FlowSOM::FlowSOMSubset(fsom = fsom$FlowSOM, ids = id)
+      id <- which(fsom$data[,"File2"] == i)
+      fsom_subset <- FlowSOM::FlowSOMSubset(fsom = fsom, ids = id)
       
       cl_counts <- rep(0, xdim * ydim)
-      counts_tmp <- table(GetClusters(fsom_subset))
+      counts_tmp <- table(FlowSOM::GetClusters(fsom_subset))
       cl_counts[as.numeric(names(counts_tmp))] <- counts_tmp
       
       cl_pctgs[file,] <- (cl_counts/sum(cl_counts, na.rm = T))*100
@@ -1598,10 +1627,10 @@ extract_pctgs_msi_per_flowsom <- function(file_list,
       mcl_counts <- tapply(cl_counts, fsom$metaclustering, sum)
       mcl_pctgs[file,] <- tapply(cl_pctgs[file,], fsom$metaclustering, sum)
       
-      cluster_mfis <- GetMFIs(fsom_subset)
+      cluster_mfis <- FlowSOM::GetClusterMFIs(fsom_subset)
       mfi_cl[file,] <- as.numeric(cluster_mfis[,names(c(phenotyping_channels,functional_channels))])
-      mcluster_mfis <- FlowSOM::MetaclusterMFIs(list(FlowSOM = fsom_subset,
-                                                     metaclustering = fsom$metaclustering))
+      mcluster_mfis <- as.matrix(FlowSOM::GetMetaclusterMFIs(list(FlowSOM = fsom_subset,
+                                                     metaclustering = fsom$metaclustering)))
       mfi_mcl[file,] <- as.numeric(mcluster_mfis[,names(c(phenotyping_channels,functional_channels))])
       
     }

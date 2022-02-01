@@ -2,29 +2,14 @@
 if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 
-if(!require("FlowRepositoryR")){
-  BiocManager::install("FlowRepositoryR")
-  library(FlowRepositoryR)
-}
+# if(!require("FlowRepositoryR")){
+#   BiocManager::install("FlowRepositoryR")
+#   library(FlowRepositoryR)
+# }
 
 if(!require("devtools")){
   install.packages("devtools")
   library(devtools)
-}
-
-if(!require("SingleCellExperiment")){
-  BiocManager::install("SingleCellExperiment")
-  library(SingleCellExperiment)
-}
-
-if(!require("CATALYST")){
-  BiocManager::install("CATALYST")
-  library(CATALYST)
-}
-
-if(!require("flowDensity")){
-  BiocManager::install("flowDensity")
-  library(flowDensity)
 }
 
 if(!require("flowCore")){
@@ -32,9 +17,39 @@ if(!require("flowCore")){
   library(flowCore)
 }
 
+if(!require("SummarizedExperiment")){
+  BiocManager::install("SummarizedExperiment")
+  library(SummarizedExperiment)
+}
+
+if(!require("SingleCellExperiment")){
+  BiocManager::install("SingleCellExperiment")
+  library(SingleCellExperiment)
+}
+
+if(!require("openCyto")){
+  BiocManager::install("openCyto")
+  library(openCyto)
+}
+
+if (!require("CytoML")) {
+  BiocManager::install("CytoML")
+  library(CytoML)
+}
+
+if(!require("flowDensity")){
+  BiocManager::install("flowDensity")
+  library(flowDensity)
+}
+
 if(!require("FlowSOM")){
   BiocManager::install("FlowSOM")
   library(FlowSOM)
+}
+
+if(!require("CATALYST")){
+  BiocManager::install("CATALYST")
+  library(CATALYST)
 }
 
 if(!require("ggplot2")){
@@ -57,9 +72,8 @@ if(!require("flowAI")){
   library(flowAI)
 }
 
-
 if(!require("flowCut")){
-  devtools::install_github("jmeskas/flowCut")
+  BiocManager::install("flowCut")
   library(flowCut)
 }
 
@@ -107,11 +121,6 @@ if (!require("ggpubr")) {
 if (!require("flowWorkspace")) {
   BiocManager::install("flowWorkspace")
   library(flowWorkspace)
-}
-
-if (!require("CytoML")) {
-  BiocManager::install("CytoML")
-  library(CytoML)
 }
 
 

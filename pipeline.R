@@ -13,18 +13,6 @@ if(!dir.exists("data")) dir.create("data")
 dir <- file.path(getwd(), "data")
 
 # ------------------------------------------------------------------------------
-# Download data from flowrepository --------------------------------------------
-#-------------------------------------------------------------------------------
-
-# Connect to flowrepository 
-ds <- flowRep.get("FR-FCM-Z3YR") 
-summary(ds)
-
-# Download the flowrepository data
-ds <- download(object = ds, 
-               dirpath = file.path(dir, "RawFiles")) 
-
-# ------------------------------------------------------------------------------
 # Bead normalization -----------------------------------------------------------
 #-------------------------------------------------------------------------------
 
@@ -40,10 +28,12 @@ files <- list.files(file.path(raw_data_dir),
                     pattern = ".FCS$", 
                     full.names = T)
 
-# create reference sample to which all the files will be normalized 
+# create baseline file to which all the files will be normalized 
 ref_sample <- baseline_file(fcs_files = files, 
                             beads = "dvs", 
                             out_dir = bead_norm_dir)
+# TODO think about how to pass all the cells to the aggregation in flowsom maybe some funstion that will do this 
+# say that otherwise single cell experiment masust be done for all files, check if aggregation is smaller than flowset
 
 # Normalize file by file in the loop, saving new file with each loop execution
 for (file in files){
@@ -63,7 +53,7 @@ for (file in files){
                                                 "TNF", "TGF", "MIP", "MCP", "Granz"))
   
   # save normalized FCS files
-  write.FCS(ff_norm, filename = file.path(bead_norm_dir, 
+  flowCore::write.FCS(ff_norm, filename = file.path(bead_norm_dir, 
                                  gsub(".FCS","_beadNorm.fcs", basename(file)))) 
 }
 
@@ -139,7 +129,7 @@ for (file in files) {
                      non_used_bead_ch = "140")
 
   # Write FCS files
-  write.FCS(ff,
+  flowCore::write.FCS(ff,
             file = file.path(clean_dir, gsub("_beadNorm","_cleaned", basename(file)))) 
 }
 
@@ -300,8 +290,8 @@ layout(matrix(1:(length(files) * n_plots),
 
 for (file in files){
   
-  ff <- read.FCS(filename = file, 
-                 transformation = FALSE)
+  ff <- flowCore::read.FCS(filename = file, 
+                           transformation = FALSE)
   
   ff <- gate_intact_cells(flow_frame = ff, 
                           file_name = NULL)
@@ -310,8 +300,8 @@ for (file in files){
                         viability_channel = "Pt195Di",
                         out_dir = gate_dir)
   
-  write.FCS(ff, file.path(gate_dir,
-                      gsub(".fcs", "_gated.fcs", basename(file))))
+  flowCore:: write.FCS(ff, file.path(gate_dir,
+                                     gsub(".fcs", "_gated.fcs", basename(file))))
 }
 
 dev.off()
@@ -347,16 +337,16 @@ if(!dir.exists(norm_dir))(dir.create(norm_dir))
 png(file.path(norm_dir, "005_095_normalization.png"),
     width = length(channels) * 300,
     height = (length(files_ref) * 2 + 1) * 300)
-model <- QuantileNorm.train(files = files_ref,
-                            labels = labels_ref, 
-                            channels = channels, 
-                            transformList = transformList(channels, 
-                                                          cytofTransform), 
-                            nQ = 2, 
-                            limit = c(0,8),
-                            quantileValues = c(0.05, 0.95), 
-                            goal = "mean", 
-                            plot = TRUE)
+model <- CytoNorm::QuantileNorm.train(files = files_ref,
+                                      labels = labels_ref, 
+                                      channels = channels, 
+                                      transformList = transformList(channels, 
+                                                                    CytoNorm::cytofTransform), 
+                                      nQ = 2, 
+                                      limit = c(0,8),
+                                      quantileValues = c(0.05, 0.95), 
+                                      goal = "mean", 
+                                      plot = TRUE)
 dev.off()
 
 # save the model
@@ -374,15 +364,14 @@ labels <- stringr::str_match(basename(files),
                              ".*_(day[0-9]*).*.fcs")[,2]
 
 # Normalize files 
-QuantileNorm.normalize(model = model, 
-                       files = files, 
-                       labels = labels, 
-                       transformList = transformList(channels, 
-                                                     cytofTransform),
-                       transformList.reverse = transformList(channels, 
-                                                             cytofTransform.reverse), 
-                       outputDir = norm_dir)
-
+CytoNorm::QuantileNorm.normalize(model = model, 
+                                 files = files, 
+                                 labels = labels, 
+                                 transformList = transformList(channels, 
+                                                               CytoNorm::cytofTransform),
+                                 transformList.reverse = transformList(channels, 
+                                                                       CytoNorm::cytofTransform.reverse), 
+                                 outputDir = norm_dir)
 
 # ------------------------------------------------------------------------------
 # Plot batch effect ------------------------------------------------------------
@@ -433,13 +422,14 @@ plot_marker_quantiles(files_after_norm = files_after_norm,
 all_files <- list("before" = files_before_norm,
                  "after" = files_after_norm)
 
-# perform FlowSom clustering and extract cell frequency and msi per cluster and metacluster
-
+# perform FlowSOM clustering and extract cell frequency and msi per cluster and metacluster
 mx <- extract_pctgs_msi_per_flowsom(file_list = all_files, 
                                     nCells = 50000, 
                                     phenotyping_markers =  c("CD", "HLA", "IgD"),
                                     functional_markers = c("MIP", "MCP", "IL", "IFNa", "TNF", "TGF", "Gr"),
-                                    xdim = 10, ydim = 10, n_metaclusters = 35, 
+                                    xdim = 10, 
+                                    ydim = 10, 
+                                    n_metaclusters = 35, 
                                     out_dir = norm_dir, 
                                     arcsine_transform = TRUE)
 
@@ -531,13 +521,13 @@ gg_a <- ggarrange(plotlist = plots,
                   ncol = 2,
                   nrow = 2)
 
-ggsave(filename ="batch_effect_frequency_MSI.png",
-       device = "png",
-       path = norm_dir,
-       plot = gg_a,
-       units = "cm",
-       width = 19,
-       height = 10, dpi = 300)
+ggplot2::ggsave(filename ="batch_effect_frequency_MSI.png",
+                device = "png",
+                path = norm_dir,
+                plot = gg_a,
+                units = "cm",
+                width = 19,
+                height = 10, dpi = 300)
 
 # ------------------------------------------------------------------------------
 # Run UMAP ---------------------------------------------------------------------
@@ -654,16 +644,16 @@ for(m in markers_to_plot){
 }
 
 # print the plots and save them 
-gg_a <- ggarrange(plotlist = plots, 
-          ncol = 2, #1, 3
-          nrow = 1) #2, 8
-ggsave(filename = "marker_expressions_in_UMAP_cyt.png", device = "png", #marker_expressions_in_UMAP_cyt.png
-       path = analysis_dir, 
-       plot = gg_a,
-       width = 18, #18
-       height = 5, # 21
-       units = "cm", 
-       dpi = 300)
+gg_a <- ggpubr::ggarrange(plotlist = plots, 
+                          ncol = 2, #1, 3
+                          nrow = 1) #2, 8
+ggplot2::ggsave(filename = "marker_expressions_in_UMAP_cyt.png", device = "png", #marker_expressions_in_UMAP_cyt.png
+                path = analysis_dir, 
+                plot = gg_a,
+                width = 18, #18
+                height = 5, # 21
+                units = "cm", 
+                dpi = 300)
 
 # select number of colors equal to the number of cell populations
 n <- length(unique(df$cell_labels))
@@ -729,13 +719,13 @@ gg_dens <-  df %>%
         legend.position = "none", 
         plot.margin = unit(c(0, 0.5, 0, 0.5), "lines"))
 
-ggsave(filename = "density_plot_UMAP.png", device = "png", #marker_expressions_in_UMAP_cyt.png
-       path = analysis_dir, 
-       plot = gg_dens,
-       width = 9, #18
-       height = 4.6, # 21
-       units = "cm", 
-       dpi = 300)
+ggplot2::ggsave(filename = "density_plot_UMAP.png", device = "png", #marker_expressions_in_UMAP_cyt.png
+                path = analysis_dir, 
+                plot = gg_dens,
+                width = 9, #18
+                height = 4.6, # 21
+                units = "cm", 
+                dpi = 300)
 
 
 
