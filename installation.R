@@ -2,11 +2,6 @@
 if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 
-# if(!require("FlowRepositoryR")){
-#   BiocManager::install("FlowRepositoryR")
-#   library(FlowRepositoryR)
-# }
-
 if(!require("devtools")){
   install.packages("devtools")
   library(devtools)

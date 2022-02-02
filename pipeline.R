@@ -32,14 +32,12 @@ files <- list.files(file.path(raw_data_dir),
 ref_sample <- baseline_file(fcs_files = files, 
                             beads = "dvs", 
                             out_dir = bead_norm_dir)
-# TODO think about how to pass all the cells to the aggregation in flowsom maybe some funstion that will do this 
-# say that otherwise single cell experiment masust be done for all files, check if aggregation is smaller than flowset
 
 # Normalize file by file in the loop, saving new file with each loop execution
 for (file in files){
   
   # read fcs file
-  ff <- read.FCS(file, transformation = FALSE, 
+  ff <- flowCore::read.FCS(file, transformation = FALSE, 
                  truncate_max_range = FALSE)
   
   # bead normalize the files
@@ -110,8 +108,8 @@ files <- list.files(file.path(bead_norm_dir),
 for (file in files) {
   
   # read fcs file
-  ff <- read.FCS(filename = file, 
-                 transformation = FALSE)
+  ff <- flowCore::read.FCS(filename = file, 
+                           transformation = FALSE)
   
   # clean Flow Rate and signal instability
   ff <- clean_flow_rate(flow_frame = ff, 
@@ -232,7 +230,7 @@ aggregate_dir <- file.path(dir, "Aggregated")
 if(!dir.exists(aggregate_dir))(dir.create(aggregate_dir))
 
 # Bring metadata 
-md <- read.csv(file.path(dir, "RawFiles", "meta_data.csv"))
+md <- read.table::read.csv(file.path(dir, "RawFiles", "meta_data.csv"))
 
 # assign barcodes names the to barcodes 
 md$barcode_name <- paste0(rownames(sample_key)[md$BARCODE])
@@ -300,8 +298,8 @@ for (file in files){
                         viability_channel = "Pt195Di",
                         out_dir = gate_dir)
   
-  flowCore:: write.FCS(ff, file.path(gate_dir,
-                                     gsub(".fcs", "_gated.fcs", basename(file))))
+  flowCore::write.FCS(ff, file.path(gate_dir,
+                                    gsub(".fcs", "_gated.fcs", basename(file))))
 }
 
 dev.off()
@@ -395,7 +393,7 @@ norm_dir <- file.path(dir, "CytoNormed")
 files_after_norm <- list.files(norm_dir, 
                                pattern = ".fcs", 
                                full.names = T)
-batch <- str_match(files_after_norm, "day[0-9]*")[,1]
+batch <- stringr::str_match(files_after_norm, "day[0-9]*")[,1]
 files_after_norm <- files_after_norm[order(factor(batch))]
 
 # Plot batch effect 
@@ -592,7 +590,7 @@ UMAP_res$cell_labels <- gating_labels
 
 # Plot UMAP between two donors using RSQ stimulation and day 1 batch
 # Add additional column to be able to do facet in ggplot
-UMAP_res$indyvidual <- str_match(UMAP_res$sample_name, "p1|p2|REF")[,1]
+UMAP_res$indyvidual <- stringr::str_match(UMAP_res$sample_name, "p1|p2|REF")[,1]
 
 # filter UMAP data frame for the needed data
 df <- UMAP_res %>% 
