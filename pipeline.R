@@ -155,6 +155,7 @@ file_quality_check(fcs_files = files,
                    out_dir = quality_dir,
                    phenotyping_markers = c("Ir","CD", "HLA", "IgD", "Pt"), 
                    arcsine_transform = TRUE, 
+                   nClus = 10,
                    sd = 3)
 
 # ------------------------------------------------------------------------------

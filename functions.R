@@ -47,12 +47,12 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
   
   flow_frame@exprs[, "Time"] <- flow_frame@exprs[, "Time"]/time_division
   
-  FlowRateData <- flowAI:::flow_rate_bin(flow_frame, 
+  FlowRateData <- flowAI:::flow_rate_bin(x = flow_frame, 
                                          timeCh = "Time", 
                                          timestep = timestep)
   
-  FlowRateQC <- flowAI:::flow_rate_check(flow_frame, 
-                                         FlowRateData, 
+  FlowRateQC <- flowAI:::flow_rate_check(x = flow_frame, 
+                                         FlowRateData = FlowRateData, 
                                          alpha = alpha, 
                                          use_decomp = TRUE) 
   
@@ -122,6 +122,9 @@ plot_flowrate <- function (FlowRateQC, data_type = "MC")
 #' The default is "All", which generates plot for all channels. Other options are
 #' "Flagged Only", plots the channels that were spotted with flowcut as incorrect
 #' and "None", does not plots anything.
+#' @param Segment As in flowCut, an integer value that specifies the 
+#' number of events in each segment to be analyzed. 
+#' Each segment is defaulted to 1000 events.
 #' @param out_dir Character, pathway to where the plots should be saved, 
 #' only if argument to_plot = TRUE, default is set to working directory.
 #' @param arcsine_transform Logical, if the data should be transformed with 
@@ -135,6 +138,9 @@ plot_flowrate <- function (FlowRateQC, data_type = "MC")
 #' worst channel that will be used for cleaninig 
 #' @param AllowFlaggedRerun as in flowCut, logical, specify if flowCut will run
 # second time in case the file was flagged
+#' @param AlwaysClean as in flowCut, logicle. The file will be cleaned even if it has a
+#' relatively stable signal. The segments that are 7 SD away from the mean of all
+#' segments are removed 
 #' @return Cleaned, untransformed flow frame if arcsine_transform argument
 #' set to TRUE, otherwise transformed flow frame is returned. Save plots with prefix
 #' "flowCutCleaned.png" to out_dir if parameter to_plot set to "All" or "Flagged Only".
@@ -149,6 +155,7 @@ clean_signal <- function(flow_frame,
                          MaxPercCut = 0.5,
                          UseOnlyWorstChannels = TRUE,
                          AllowFlaggedRerun = TRUE,
+                         AlwaysClean = TRUE,
                          data_type = "MC",
                          ...){
   
@@ -213,7 +220,7 @@ clean_signal <- function(flow_frame,
                                    Directory = out_dir,
                                    UseOnlyWorstChannels = UseOnlyWorstChannels,
                                    AllowFlaggedRerun = AllowFlaggedRerun,
-                                   AlwaysClean = TRUE)
+                                   AlwaysClean = AlwaysClean)
   
   ff_t_clean <- cleaned_data$frame
   
@@ -799,7 +806,7 @@ file_outlier_detecion <- function(scores, out_dir = getwd(), sd) {
 #' @param out_dir Character, pathway to where the plots should be saved, 
 #' only if argument to_plot = TRUE, default is set to working directory
 #' @param phenotyping_markers Character vector, marker names to be used for 
-#' flowsom clustering inlcuding DNA marker Iridium and viability staining if avaiable,
+#' flowsom clustering including DNA marker Iridium and viability staining if available,
 #' can be full marker name e.g. "CD45" or pattern "CD" if 
 #' all CD-markers needs to be plotted, default is set to NULL, so all the mass 
 #' channels will be used 
@@ -807,7 +814,8 @@ file_outlier_detecion <- function(scores, out_dir = getwd(), sd) {
 #' arcsine transformation and cofactor 5.
 #' @param sd numeric, number of standard deviation allowed for file outlier
 #' detection, default = 3.
-#' @param ... arguments to be passed to fsom_aof function for flowSOM parameter 
+#' @param nClus 
+#' @param ... arguments to be passed to fsom_aof function for FlowSOM parameter 
 #' adjustment
 #' @return plots Quality AOF scores for all files and save .RDS and .csv Quality 
 #' scores for further analysis, files are saved in out_dir 
@@ -818,6 +826,7 @@ file_quality_check <- function(fcs_files,
                                phenotyping_markers = NULL, 
                                arcsine_transform = TRUE, 
                                sd = 3, 
+                               nClus = 10, 
                                ...){
   
   if(!dir.exists(out_dir)) dir.create(out_dir)
@@ -832,6 +841,7 @@ file_quality_check <- function(fcs_files,
                        phenotyping_markers = phenotyping_markers, 
                        out_dir = out_dir, 
                        arcsine_transform = arcsine_transform,
+                       nClus = nClus,
                        batch = batch, ...)
       
       scores[[batch]] <- aof_scoring(fcs_files = files, phenotyping_markers = phenotyping_markers,
@@ -841,7 +851,7 @@ file_quality_check <- function(fcs_files,
   } else {
     files <- fcs_files
     fsom <- fsom_aof(fcs_files = files, phenotyping_markers = phenotyping_markers, 
-                     out_dir = out_dir, arcsine_transform = arcsine_transform,
+                     out_dir = out_dir, arcsine_transform = arcsine_transform, nClus = nClus,
                      batch = NULL)
     
     scores <- aof_scoring(fcs_files = files, phenotyping_markers = phenotyping_markers,
@@ -858,7 +868,7 @@ file_quality_check <- function(fcs_files,
 #' the order needs to be the same as in fcs_files.
 #' @param out_dir Character, pathway to where the plots should be saved, 
 #' only if argument to_plot = TRUE, default is set to working directory
-#' @param min_threshold logicle, if the minimal treshold for barcoding should be applied. 
+#' @param min_threshold logicle, if the minimal threshold for barcoding should be applied. 
 #' @param threshold numeric, value for the minimum threshold for debarcoding, 
 #' default is set to 0.18 
 #' @param to_plot Logical, if plots for yields and debarcoding quality shoudl we drawn
@@ -1062,13 +1072,13 @@ aggregate_files <- function(fcs_files,
 #' @param file_name Character, the file name used only for plotting, if NULL
 #' the file name stored in keyword GUID.original will be used, default is set to NULL
 #' @param tinypeak_removal1, numeric from 0-1, as in deGate to exclude/include 
-#' tiny peaks in the head of the density ditribution curve for both Iridium 
+#' tiny peaks in the head of the density distribution curve for both Iridium 
 #' channels
 #' @param tinypeak_removal2 the same as tinypeak_removal1 but for the tail 
-#' in the density ditribution curve
+#' in the density distribution curve
 #' @param alpha1 numeric, 0-1, as in deGate specify the significance of change 
-#' in the slope being detected at the head of the density ditribution curve
-#' @param alpha2 the same as in alpha1 but for the head of the density ditribution curve
+#' in the slope being detected at the head of the density distribution curve
+#' @param alpha2 the same as in alpha1 but for the tail of the density distribution curve
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5.
 #' @return flow frame with intact cells
@@ -1092,8 +1102,8 @@ gate_intact_cells <- function(flow_frame,
   if(arcsine_transform == TRUE){
     
     ff_t <- flowCore::transform(ff, 
-                      transformList(colnames(ff)[grep("Di", colnames(ff))], 
-                                    CytoNorm::cytofTransform))
+                                flowCore::transformList(colnames(ff)[grep("Di", colnames(ff))], 
+                                                        CytoNorm::cytofTransform))
   } else {
     ff_t <- ff
   }
@@ -1140,8 +1150,7 @@ gate_intact_cells <- function(flow_frame,
 #' @param flow_frame Character, full path to fcs_file.
 #' @param file_name Character, the file name used only for plotting, if NULL
 #' the file name stored in keyword GUID.original will be used, default is set to NULL
-#' @param viability_channel Character, the channel name used for viability staining, 
-#' default is set to ""
+#' @param viability_channel Character, the channel name used for viability staining
 #' @param tinypeak_removal_viability, numeric from 0-1, as in deGate to exclude/include 
 #' tiny peaks in the tail of the density ditribution curve for both viability channel 
 #' @param tinypeak_removal_Iridium the same as tinypeak_removal_viablity but for
@@ -1515,8 +1524,8 @@ split_big_flowFrames <- function(flow_frame,
 #' default is set to 10
 #' @param ydim Numeric, parameter to pass to FlowSOM, geight of the SOM grid,
 #' default is set to 10
-#' @param n_metaclusters Numeric, exact number of clusters for metaclustering, 
-#' default is set to 35
+#' @param n_metaclusters Numeric, exact number of clusters for metaclustering 
+#' in FlowSOM, default is set to 35
 #' @param out_dir Character, pathway to where the FlowSOM clustering plot should
 #'  be saved, default is set to working directory.
 #' @seed seed to be et to obtain reproducible results, default is set to 789
