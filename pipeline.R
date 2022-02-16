@@ -231,7 +231,7 @@ aggregate_dir <- file.path(dir, "Aggregated")
 if(!dir.exists(aggregate_dir))(dir.create(aggregate_dir))
 
 # Bring metadata 
-md <- read.table::read.csv(file.path(dir, "RawFiles", "meta_data.csv"))
+md <- utils::read.csv(file.path(dir, "RawFiles", "meta_data.csv"))
 
 # assign barcodes names the to barcodes 
 md$barcode_name <- paste0(rownames(sample_key)[md$BARCODE])

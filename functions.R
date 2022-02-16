@@ -524,7 +524,7 @@ plot_marker_quantiles <- function(files_before_norm,
     p <- p + ggplot2::scale_colour_manual(values = c(manual_colors))
   }
   
-  ggplot2::ggsave(filename = "Marker distribution across aliquots and batches.pdf", 
+  ggplot2::ggsave(filename = "Marker_distribution_across_aliquots_and_batches.pdf", 
                  plot = p, 
                  path = file.path(out_dir), 
                  width = length(fcs_files)*0.25, height = length(norm_markers)*4, limitsize = F)
@@ -999,13 +999,15 @@ debarcode_files <- function(fcs_files,
 #' default is set to NULL
 #' @param write_agg_file Logicle, if the fcs files should be saved, if TRUE 
 #' files will be saved in getwd(). Default set to FALSE
+#' @out_dir 
 #' @return aggregated flow frame 
 
 aggregate_files <- function(fcs_files, 
                             channels_to_keep = NULL,
                             outputFile = "aggregate.fcs", 
                             maxcells = NULL, 
-                            write_agg_file = FALSE){
+                            write_agg_file = FALSE,
+                            out_dir = getwd()){
   
   nFiles <- length(fcs_files)
   flowFrame <- NULL
@@ -1061,7 +1063,8 @@ aggregate_files <- function(fcs_files,
   #write.FCS.corrected(flowFrame, filename = outputFile, endian = "big")
   
   if(write_agg_file == TRUE){
-     flowCore::write.FCS(flowFrame, filename = outputFile, endian = "big")
+    
+     flowCore::write.FCS(flowFrame, filename = file.path(out_dir, outputFile), endian = "big")
   }
 
   return(flowFrame)
