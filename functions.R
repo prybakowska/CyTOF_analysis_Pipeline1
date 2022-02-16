@@ -9,7 +9,7 @@ check <- function(x) tryCatch(if(class(x) == 'logical') 1 else 1,
                               error=function(e) 0)
 
 find_mass_ch <- function(flow_frame, 
-                         channels = "Time|Event_length|Center|Offset|Width|Residual|SSC|FSC",
+                         channels = "Time|Event_length|Center|Offset|Width|Residual|SSC|FSC|File_scattered",
                          ...){
   non_mass_ch <- grep(c(channels), 
        colnames(flow_frame), 
@@ -101,7 +101,7 @@ plot_flowrate <- function (FlowRateQC, data_type = "MC")
                                      count_anom = anoms$anoms))
   xgraph <- ggplot2::ggplot(frequencies, aes_string(x = "secbin", y = "tbCounts")) + 
     theme_bw() + theme(panel.grid.major = element_blank(), 
-                       panel.grid.minor = element_blank(), text = element_text(size = 34)) + 
+                       panel.grid.minor = element_blank(), text = element_text(size = 30)) + 
     geom_line(colour = "darkblue")
   xgraph <- xgraph + ggplot2::labs(x = lab, y = paste0("Number of events per 1/", 
                                                        1/second_fraction, " of a second"))
@@ -475,14 +475,16 @@ plot_marker_quantiles <- function(files_before_norm,
   }
   
   if(is.null(uncommon_prefix)){
-    quantiles$Sample <- gsub("Norm_", "", 
-                             gsub("_CC_gated.fcs|_gated.fcs|_beadNorm.fcs|.FCS|.fcs",
-                                  "", basename(as.character(quantiles$File))))
+    quantiles$Sample <- gsub(pattern = "Norm_", replacement = "", ignore.case = TRUE,
+                             x = gsub(pattern = "_CC_gated.fcs|_gated.fcs|_beadNorm.fcs|.FCS|.fcs",
+                                  replacement = "", ignore.case = TRUE,
+                                  x = basename(as.character(quantiles$File))))
   } else {
     uncommon_prefix <- paste(uncommon_prefix, collapse = ("|"))
-    quantiles$Sample <- gsub("Norm_", "", 
-                             gsub(uncommon_prefix,
-                                  "", basename(as.character(quantiles$File))))
+    quantiles$Sample <- gsub(pattern = "Norm_", replacement = "", ignore.case = TRUE,
+                             x = gsub(pattern = uncommon_prefix, replacement = "", 
+                                      ignore.case = TRUE,
+                                      x =  basename(as.character(quantiles$File))))
   }
   
   ncols <- length(unique(quantiles$Batch))
@@ -517,7 +519,7 @@ plot_marker_quantiles <- function(files_before_norm,
     p <- p + ggplot2::scale_colour_manual(values = c(manual_colors))
   }
   
-  ggplot2::ggsave(filename = "Marker distribution across aliquots and batches.pdf", 
+  ggplot2::ggsave(filename = "Marker_distribution_across_aliquots_and_batches.pdf", 
                  plot = p, 
                  path = file.path(out_dir), 
                  width = length(fcs_files)*0.25, height = length(norm_markers)*4, limitsize = F)
@@ -708,7 +710,7 @@ aof_scoring <- function(fcs_files,
   for(file in fcs_files){ 
     print(paste("calculating AOF", file))
     File_ID <- which(fcs_files == file)
-    idx <- which(fsom$data[,"File"] == File_ID)
+    idx <- which(fsom$data[,"File2"] == File_ID)
     fcs_data <- fsom$data[idx,]
     MC <- fsom$metaclustering[fsom$map$mapping[idx, 1]]
     

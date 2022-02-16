@@ -103,7 +103,8 @@ clean_dir <- file.path(dir, "Cleaned")
 if(!dir.exists(clean_dir)) dir.create(clean_dir)
 
 # Define which files will be cleaned
-files <- list.files(file.path(bead_norm_dir), 
+files <- list.files(bead_norm_dir,
+                    ignore.case = TRUE, 
                     pattern = "_beadNorm.fcs$", 
                     full.names = TRUE)
 
@@ -114,13 +115,13 @@ for (file in files) {
   ff <- flowCore::read.FCS(filename = file, 
                            transformation = FALSE)
   
-  # clean Flow Rate and signal instability
+  # clean flow rate 
   ff <- clean_flow_rate(flow_frame = ff, 
                         out_dir = clean_dir, 
                         to_plot = TRUE,
                         data_type = "MC")
   
-  # clean Signal 
+  # clean signal 
   ff <- clean_signal(flow_frame = ff,
                      to_plot = "All",
                      out_dir = clean_dir,
