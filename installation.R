@@ -67,6 +67,8 @@ if(!require("flowAI")){
   library(flowAI)
 }
 
+# Cairo
+
 if(!require("flowCut")){
   BiocManager::install("flowCut")
   library(flowCut)

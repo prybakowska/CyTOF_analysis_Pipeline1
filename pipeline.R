@@ -52,7 +52,8 @@ for (file in files){
   
   # save normalized FCS files
   flowCore::write.FCS(ff_norm, filename = file.path(bead_norm_dir, 
-                                 gsub(".FCS","_beadNorm.fcs", basename(file)))) 
+                                 gsub(".FCS","_beadNorm.fcs", basename(file), 
+                                      ignore.case = TRUE))) 
 }
 
 # ------------------------------------------------------------------------------
@@ -66,17 +67,19 @@ bead_norm_dir <- file.path(dir, "BeadNorm")
 # Define files for visualization
 
 # before normalization 
-files_b <- list.files(file.path(raw_data_dir), 
+files_b <- list.files(raw_data_dir, 
                       pattern = ".FCS$", 
+                      ignore.case = T,
                       full.names = TRUE)
 
 # after normalization 
-files_a <- list.files(file.path(bead_norm_dir), 
+files_a <- list.files(bead_norm_dir, 
                       pattern = "_beadNorm.fcs$", 
+                      ignore.case = T,
                       full.names = TRUE)
 
 # Define batch id and sample id for each file
-batch_pattern <- str_match(basename(files_b), ".*(day[0-9]*).*.FCS")[,2]
+batch_pattern <- str_match(basename(files_b), "(?i).*(day[0-9]*).*.FCS")[,2]
 
 plot_marker_quantiles(files_after_norm = files_a, 
                       files_before_norm = files_b, 

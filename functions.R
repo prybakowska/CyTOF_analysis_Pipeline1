@@ -346,13 +346,13 @@ bead_normalize <- function(flow_frame,
   
   # normalize the data and remove beads
   dat_norm <- CATALYST::normCytof(x = dat,
-                        beads = beads,
-                        remove_beads = remove_beads,
-                        norm_to = norm_to_ref,
-                        k = k,
-                        plot = TRUE, 
-                        transform = FALSE, 
-                        ...)
+                                  beads = beads,
+                                  remove_beads = remove_beads,
+                                  norm_to = norm_to_ref,
+                                  k = k,
+                                  plot = TRUE, 
+                                  transform = FALSE, 
+                                  ...)
  
   # convert back to .fcs files and save 
   f <- CATALYST::sce2fcs(dat_norm$data)
