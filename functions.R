@@ -695,10 +695,10 @@ aof_scoring <- function(fcs_files,
     phenotyping_channels <- grep(paste(phenotyping_markers, 
                                        collapse = ("|")), markers, value = TRUE)
     
-   if(length(grep("Ir", phenotyping_channels)) > 1){
-     phenotyping_channels <- phenotyping_channels[-(grep("Ir", 
-                                                         phenotyping_channels)[2])]
-   }
+    if(length(grep("Ir", phenotyping_channels)) > 1){
+      phenotyping_channels <- phenotyping_channels[-(grep("Ir", 
+                                                          phenotyping_channels)[2])]
+    }
   }
   
   aof_scores <- matrix(NA,
@@ -710,7 +710,7 @@ aof_scoring <- function(fcs_files,
   for(file in fcs_files){ 
     print(paste("calculating AOF", file))
     File_ID <- which(fcs_files == file)
-    idx <- which(fsom$data[,"File2"] == File_ID)
+    idx <- which(fsom$data[,"File"] == File_ID)
     fcs_data <- fsom$data[idx,]
     MC <- fsom$metaclustering[fsom$map$mapping[idx, 1]]
     
@@ -835,7 +835,7 @@ file_quality_check <- function(fcs_files,
                        out_dir = out_dir, 
                        arcsine_transform = arcsine_transform,
                        batch = batch, ...)
-      
+    
       scores[[batch]] <- aof_scoring(fcs_files = files, phenotyping_markers = phenotyping_markers,
                                      fsom = fsom, out_dir = out_dir, batch = batch)
     }
@@ -1049,8 +1049,6 @@ aggregate_files <- function(fcs_files,
   flowFrame@description[[paste("$P", ncol(flowFrame), "B", 
                                sep = "")]] <- 32
   flowFrame@description$FIL <- gsub(".*/", "", outputFile)
-  
-  #write.FCS.corrected(flowFrame, filename = outputFile, endian = "big")
   
   if(write_agg_file == TRUE){
      flowCore::write.FCS(flowFrame, filename = outputFile, endian = "big")

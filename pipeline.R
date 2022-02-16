@@ -143,7 +143,7 @@ for (file in files) {
 clean_dir <- file.path(dir, "Cleaned")
 
 # Define files for visualization
-files <- list.files(file.path(clean_dir), 
+files <- list.files(clean_dir, 
                     pattern = "_cleaned.fcs$", 
                     full.names = TRUE)
 
@@ -169,7 +169,7 @@ file_quality_check(fcs_files = files,
 clean_dir <- file.path(dir, "Cleaned")
 
 # Define files for debarcoding
-files <- list.files(file.path(clean_dir), 
+files <- list.files(clean_dir, 
                     pattern = "_cleaned.fcs$", 
                     full.names = TRUE)
 
@@ -191,7 +191,7 @@ file_batch_id <- stringr::str_match(basename(fcs_files_clean),
                                     "(day[0-9]*).*.fcs")[,2]
 
 # Read in metadata 
-md <- read.csv(file.path(dir, "RawFiles", "meta_data.csv"))
+md <- utils::read.csv(file.path(dir, "RawFiles", "meta_data.csv"))
 
 # read in barcode key 
 sample_key <- CATALYST::sample_key
@@ -218,14 +218,14 @@ debarcode_files(fcs_files = fcs_files_clean,
                 barcode_key = sample_key)
 
 # ------------------------------------------------------------------------------
-# Files aggregation ------------------------------------------------------------
+# Files aggregation and file name deconvolution --------------------------------
 # ------------------------------------------------------------------------------
 
 # Set input directory 
 debarcode_dir <- file.path(dir, "Debarcoded")
 
 # Define files for debarcoding
-files <- list.files(file.path(debarcode_dir), 
+files <- list.files(debarcode_dir, 
                     pattern = "_debarcoded.fcs$", 
                     full.names = TRUE, recursive = T)
 
@@ -234,7 +234,7 @@ aggregate_dir <- file.path(dir, "Aggregated")
 if(!dir.exists(aggregate_dir))(dir.create(aggregate_dir))
 
 # Bring metadata 
-md <- read.table::read.csv(file.path(dir, "RawFiles", "meta_data.csv"))
+md <- utils::read.csv(file.path(dir, "RawFiles", "meta_data.csv"))
 
 # assign barcodes names the to barcodes 
 md$barcode_name <- paste0(rownames(sample_key)[md$BARCODE])
