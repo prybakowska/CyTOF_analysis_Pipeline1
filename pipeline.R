@@ -316,7 +316,7 @@ dev.off()
 gate_dir <- file.path(dir, "Gated")
 
 # Define reference samples
-files_ref <- list.files(file.path(gate_dir), 
+files_ref <- list.files(gate_dir, 
                         pattern = "REF.*_gated.fcs$", 
                         full.names = TRUE, 
                         recursive = T)
