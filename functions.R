@@ -17,6 +17,42 @@ find_mass_ch <- function(flow_frame,
   return(non_mass_ch)
 }
 
+# TODO description 
+flow_rate_bin_addapted <- function (x, second_fraction = 0.1, timeCh = timeCh, timestep = timestep) 
+{
+  xx <- exprs(x)[, timeCh]
+  idx <- c(1:nrow(x))
+  endsec <- ceiling(timestep * max(xx))
+  lenx <- length(xx)
+  secbegin <- as.numeric(gsub("(.*)(\\.)(.{0}).*", "\\1\\2\\3", xx[1]))
+  tbins <- seq(secbegin, endsec/timestep, by = as.numeric(second_fraction)/timestep)
+  if (tail(tbins, n=1) < endsec/timestep){
+    tbins <- c(tbins, tail(tbins, n=1) + 10)
+  }
+  if (secbegin == 0){
+    secbegin2 <- 0
+  } else {
+    secbegin2 <- as.numeric(gsub("(.*)(\\.)(.{1}).*", "\\1\\2\\3", xx[1]/100))
+  }
+  
+  secbin <- seq(secbegin2, endsec, by = as.numeric(second_fraction))
+  minbin <- round(secbin/60, 3)
+  nrBins <- length(tbins) - 1
+  tbCounts <- c(0, hist(xx, tbins, plot = FALSE)$counts)
+  expEv <- lenx/(nrBins)
+  binID <- do.call(c, mapply(rep, x = 1:length(tbCounts), 
+                             times = tbCounts, SIMPLIFY = FALSE))
+  if (length(idx) != length(binID)) 
+    stop("length of cell ID not equal length of bin ID")
+  timeFlowData <- list(frequencies = cbind(tbins, minbin, 
+                                           secbin, tbCounts), 
+                       cellBinID = data.frame(cellID = idx, 
+                                              binID = binID), info = data.frame(second_fraction = second_fraction, 
+                                                                                expFrequency = expEv, bins = nrBins))
+  return(timeFlowData)
+}
+
+
 #' @description Cleans the flow rate using functions from flowAI package.
 #' @param flow_frame Untransformed flow frame
 #' @param to_plot Logical if to plot cleaning results, default is set to TRUE.
@@ -47,7 +83,7 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
   
   flow_frame@exprs[, "Time"] <- flow_frame@exprs[, "Time"]/time_division
   
-  FlowRateData <- flowAI:::flow_rate_bin(flow_frame, 
+  FlowRateData <- flow_rate_bin_addapted(flow_frame, 
                                          timeCh = "Time", 
                                          timestep = timestep)
   
@@ -65,7 +101,7 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
     
     png(file.path(out_dir,
                   gsub(".fcs", "_flowAI.png", 
-                       basename(flow_frame@description$FILENAME))),
+                       basename(flow_frame@description$FILENAME), ignore.case = TRUE)),
         width = 800,
         height = 600)
     if(data_type == "MC"){
@@ -78,9 +114,10 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
   
   flow_frame_cl <- flow_frame[FlowRateQC$goodCellIDs,]
   flow_frame_cl@exprs[,"Time"] <- flow_frame_cl@exprs[,"Time"]*time_division
-
+  
   return(flow_frame_cl)
 }
+
 
 #' @description plots flow rate for .fcs files
 #' @param FlowRateQC list obtained using flowAI:::flow_rate_check function
