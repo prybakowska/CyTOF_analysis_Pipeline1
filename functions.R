@@ -412,6 +412,9 @@ bead_normalize <- function(flow_frame,
    
   }
   
+  f@description$FILENAME <- basename(flow_frame@description$FILENAME)
+  f@description$FIL <- basename(flow_frame@description$FILENAME)
+  
   return(f)
 }
 
