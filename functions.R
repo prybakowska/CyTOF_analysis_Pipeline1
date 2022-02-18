@@ -1464,7 +1464,7 @@ make_breaks <- function(event_per_flow_frame, total_events){
   return(list("breaks"=breaks, "events_per_flowframe"=event_per_flow_frame))
 }
 
-#'@description Calculates begining and end of each flow frame
+#'@description Calculates beginning and end of each flow frame
 split_flowFrames <- function(vec, seg.length) {
   starts=seq(1, length(vec), by=seg.length)
   ends  = starts + seg.length - 1
