@@ -203,11 +203,6 @@ for (batch in unique(file_batch_id)){
   barcodes_list[[batch]] <- rownames(sample_key)[idx] 
 }
 
-# Alternatively define barcodes list manually 
-# barcodes_list <- list("day1" = rownames(sample_key)[c(2:6, 8:13, 15)],
-#                       "day2" = rownames(sample_key)[c(6:17)],
-#                       "day3" = rownames(sample_key)[c(8:19)])
-
 # Debarcode files 
 debarcode_files(fcs_files = fcs_files_clean, 
                 out_dir = debarcode_dir, 
@@ -496,12 +491,13 @@ for (name in c("cl_pctgs","mcl_pctgs","mfi_cl","mfi_mcl")){
   
   # plot
   gg <- ggplot(dr, aes(x = dim1, y = dim2))+
-    geom_point(data=dr, aes_string(x="dim1", y="dim2", fill = "day", shape = "sample"), size = 3)+
+    geom_point(data=dr, aes_string(x="dim1", y="dim2", fill = "day", shape = "sample", color = "day"), 
+               size = 3)+
     facet_wrap(~normalization)+
     ggtitle(names(title_gg)[which(title_gg%in% name)])+
     scale_shape_manual(values = c(22, 21, 24))+
-    scale_fill_manual(values = c("darkorchid4", "darkorange", "chartreuse4"), )+
-    # scale_fill_manual(values = c("green", "yellow", "black"))+
+    scale_fill_manual(values = c("darkorchid4", "darkorange", "chartreuse4"))+
+    scale_color_manual(values = c("darkorchid4", "darkorange", "chartreuse4"))+
     theme(panel.background = element_rect(fill = "white", colour = "black",
                                           size = 1, linetype = "solid"),
           panel.grid.major = element_blank(),
@@ -510,7 +506,7 @@ for (name in c("cl_pctgs","mcl_pctgs","mfi_cl","mfi_mcl")){
           axis.ticks = element_blank(),
           axis.title.y = element_blank(),
           axis.title.x = element_blank(),
-          legend.position = "none",
+          legend.position = "right",
           legend.key=element_blank(),
           title = element_text(size = 10),
           strip.text = element_blank(), 
