@@ -52,7 +52,8 @@ for (file in files){
   
   # save normalized FCS files
   flowCore::write.FCS(ff_norm, filename = file.path(bead_norm_dir, 
-                                 gsub(".FCS","_beadNorm.fcs", basename(file)))) 
+                                 gsub(".FCS","_beadNorm.fcs", basename(file), 
+                                      ignore.case = TRUE))) 
 }
 
 # ------------------------------------------------------------------------------
@@ -66,17 +67,19 @@ bead_norm_dir <- file.path(dir, "BeadNorm")
 # Define files for visualization
 
 # before normalization 
-files_b <- list.files(file.path(raw_data_dir), 
+files_b <- list.files(raw_data_dir, 
                       pattern = ".FCS$", 
+                      ignore.case = T,
                       full.names = TRUE)
 
 # after normalization 
-files_a <- list.files(file.path(bead_norm_dir), 
+files_a <- list.files(bead_norm_dir, 
                       pattern = "_beadNorm.fcs$", 
+                      ignore.case = T,
                       full.names = TRUE)
 
 # Define batch id and sample id for each file
-batch_pattern <- str_match(basename(files_b), ".*(day[0-9]*).*.FCS")[,2]
+batch_pattern <- str_match(basename(files_b), "(?i).*(day[0-9]*).*.FCS")[,2]
 
 plot_marker_quantiles(files_after_norm = files_a, 
                       files_before_norm = files_b, 
@@ -100,7 +103,8 @@ clean_dir <- file.path(dir, "Cleaned")
 if(!dir.exists(clean_dir)) dir.create(clean_dir)
 
 # Define which files will be cleaned
-files <- list.files(file.path(bead_norm_dir), 
+files <- list.files(bead_norm_dir,
+                    ignore.case = TRUE, 
                     pattern = "_beadNorm.fcs$", 
                     full.names = TRUE)
 
@@ -111,13 +115,13 @@ for (file in files) {
   ff <- flowCore::read.FCS(filename = file, 
                            transformation = FALSE)
   
-  # clean Flow Rate and signal instability
+  # clean flow rate 
   ff <- clean_flow_rate(flow_frame = ff, 
                         out_dir = clean_dir, 
                         to_plot = TRUE,
                         data_type = "MC")
   
-  # clean Signal 
+  # clean signal 
   ff <- clean_signal(flow_frame = ff,
                      to_plot = "All",
                      out_dir = clean_dir,
@@ -139,7 +143,7 @@ for (file in files) {
 clean_dir <- file.path(dir, "Cleaned")
 
 # Define files for visualization
-files <- list.files(file.path(clean_dir), 
+files <- list.files(clean_dir, 
                     pattern = "_cleaned.fcs$", 
                     full.names = TRUE)
 
@@ -166,7 +170,7 @@ file_quality_check(fcs_files = files,
 clean_dir <- file.path(dir, "Cleaned")
 
 # Define files for debarcoding
-files <- list.files(file.path(clean_dir), 
+files <- list.files(clean_dir, 
                     pattern = "_cleaned.fcs$", 
                     full.names = TRUE)
 
@@ -188,7 +192,7 @@ file_batch_id <- stringr::str_match(basename(fcs_files_clean),
                                     "(day[0-9]*).*.fcs")[,2]
 
 # Read in metadata 
-md <- read.csv(file.path(dir, "RawFiles", "meta_data.csv"))
+md <- utils::read.csv(file.path(dir, "RawFiles", "meta_data.csv"))
 
 # read in barcode key 
 sample_key <- CATALYST::sample_key
@@ -200,11 +204,6 @@ for (batch in unique(file_batch_id)){
   barcodes_list[[batch]] <- rownames(sample_key)[idx] 
 }
 
-# Alternatively define barcodes list manually 
-# barcodes_list <- list("day1" = rownames(sample_key)[c(2:6, 8:13, 15)],
-#                       "day2" = rownames(sample_key)[c(6:17)],
-#                       "day3" = rownames(sample_key)[c(8:19)])
-
 # Debarcode files 
 debarcode_files(fcs_files = fcs_files_clean, 
                 out_dir = debarcode_dir, 
@@ -215,14 +214,14 @@ debarcode_files(fcs_files = fcs_files_clean,
                 barcode_key = sample_key)
 
 # ------------------------------------------------------------------------------
-# Files aggregation ------------------------------------------------------------
+# Files aggregation and file name deconvolution --------------------------------
 # ------------------------------------------------------------------------------
 
 # Set input directory 
 debarcode_dir <- file.path(dir, "Debarcoded")
 
 # Define files for debarcoding
-files <- list.files(file.path(debarcode_dir), 
+files <- list.files(debarcode_dir, 
                     pattern = "_debarcoded.fcs$", 
                     full.names = TRUE, recursive = T)
 
@@ -313,7 +312,7 @@ dev.off()
 gate_dir <- file.path(dir, "Gated")
 
 # Define reference samples
-files_ref <- list.files(file.path(gate_dir), 
+files_ref <- list.files(gate_dir, 
                         pattern = "REF.*_gated.fcs$", 
                         full.names = TRUE, 
                         recursive = T)
@@ -493,12 +492,13 @@ for (name in c("cl_pctgs","mcl_pctgs","mfi_cl","mfi_mcl")){
   
   # plot
   gg <- ggplot(dr, aes(x = dim1, y = dim2))+
-    geom_point(data=dr, aes_string(x="dim1", y="dim2", fill = "day", shape = "sample"), size = 3)+
+    geom_point(data=dr, aes_string(x="dim1", y="dim2", fill = "day", shape = "sample", color = "day"), 
+               size = 3)+
     facet_wrap(~normalization)+
     ggtitle(names(title_gg)[which(title_gg%in% name)])+
     scale_shape_manual(values = c(22, 21, 24))+
-    scale_fill_manual(values = c("darkorchid4", "darkorange", "chartreuse4"), )+
-    # scale_fill_manual(values = c("green", "yellow", "black"))+
+    scale_fill_manual(values = c("darkorchid4", "darkorange", "chartreuse4"))+
+    scale_color_manual(values = c("darkorchid4", "darkorange", "chartreuse4"))+
     theme(panel.background = element_rect(fill = "white", colour = "black",
                                           size = 1, linetype = "solid"),
           panel.grid.major = element_blank(),
@@ -507,7 +507,7 @@ for (name in c("cl_pctgs","mcl_pctgs","mfi_cl","mfi_mcl")){
           axis.ticks = element_blank(),
           axis.title.y = element_blank(),
           axis.title.x = element_blank(),
-          legend.position = "none",
+          legend.position = "right",
           legend.key=element_blank(),
           title = element_text(size = 10),
           strip.text = element_blank(), 

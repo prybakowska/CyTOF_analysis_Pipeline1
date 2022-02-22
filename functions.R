@@ -9,13 +9,49 @@ check <- function(x) tryCatch(if(class(x) == 'logical') 1 else 1,
                               error=function(e) 0)
 
 find_mass_ch <- function(flow_frame, 
-                         channels = "Time|Event_length|Center|Offset|Width|Residual|SSC|FSC",
+                         channels = "Time|Event_length|Center|Offset|Width|Residual|SSC|FSC|File_scattered",
                          ...){
   non_mass_ch <- grep(c(channels), 
        colnames(flow_frame), 
        invert = TRUE, ...)
   return(non_mass_ch)
 }
+
+# TODO description 
+flow_rate_bin_addapted <- function (x, second_fraction = 0.1, timeCh = timeCh, timestep = timestep) 
+{
+  xx <- exprs(x)[, timeCh]
+  idx <- c(1:nrow(x))
+  endsec <- ceiling(timestep * max(xx))
+  lenx <- length(xx)
+  secbegin <- as.numeric(gsub("(.*)(\\.)(.{0}).*", "\\1\\2\\3", xx[1]))
+  tbins <- seq(secbegin, endsec/timestep, by = as.numeric(second_fraction)/timestep)
+  if (tail(tbins, n=1) < endsec/timestep){
+    tbins <- c(tbins, tail(tbins, n=1) + 10)
+  }
+  if (secbegin == 0){
+    secbegin2 <- 0
+  } else {
+    secbegin2 <- as.numeric(gsub("(.*)(\\.)(.{1}).*", "\\1\\2\\3", xx[1]/100))
+  }
+  
+  secbin <- seq(secbegin2, endsec, by = as.numeric(second_fraction))
+  minbin <- round(secbin/60, 3)
+  nrBins <- length(tbins) - 1
+  tbCounts <- c(0, hist(xx, tbins, plot = FALSE)$counts)
+  expEv <- lenx/(nrBins)
+  binID <- do.call(c, mapply(rep, x = 1:length(tbCounts), 
+                             times = tbCounts, SIMPLIFY = FALSE))
+  if (length(idx) != length(binID)) 
+    stop("length of cell ID not equal length of bin ID")
+  timeFlowData <- list(frequencies = cbind(tbins, minbin, 
+                                           secbin, tbCounts), 
+                       cellBinID = data.frame(cellID = idx, 
+                                              binID = binID), info = data.frame(second_fraction = second_fraction, 
+                                                                                expFrequency = expEv, bins = nrBins))
+  return(timeFlowData)
+}
+
 
 #' @description Cleans the flow rate using functions from flowAI package.
 #' @param flow_frame Untransformed flow frame
@@ -47,7 +83,8 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
   
   flow_frame@exprs[, "Time"] <- flow_frame@exprs[, "Time"]/time_division
   
-  FlowRateData <- flowAI:::flow_rate_bin(x = flow_frame, 
+  
+  FlowRateData <- flow_rate_bin_addapted(flow_frame, 
                                          timeCh = "Time", 
                                          timestep = timestep)
   
@@ -65,7 +102,7 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
     
     png(file.path(out_dir,
                   gsub(".fcs", "_flowAI.png", 
-                       basename(flow_frame@description$FILENAME))),
+                       basename(flow_frame@description$FILENAME), ignore.case = TRUE)),
         width = 800,
         height = 600)
     if(data_type == "MC"){
@@ -78,9 +115,10 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
   
   flow_frame_cl <- flow_frame[FlowRateQC$goodCellIDs,]
   flow_frame_cl@exprs[,"Time"] <- flow_frame_cl@exprs[,"Time"]*time_division
-
+  
   return(flow_frame_cl)
 }
+
 
 #' @description plots flow rate for .fcs files
 #' @param FlowRateQC list obtained using flowAI:::flow_rate_check function
@@ -101,7 +139,7 @@ plot_flowrate <- function (FlowRateQC, data_type = "MC")
                                      count_anom = anoms$anoms))
   xgraph <- ggplot2::ggplot(frequencies, aes_string(x = "secbin", y = "tbCounts")) + 
     theme_bw() + theme(panel.grid.major = element_blank(), 
-                       panel.grid.minor = element_blank(), text = element_text(size = 34)) + 
+                       panel.grid.minor = element_blank(), text = element_text(size = 30)) + 
     geom_line(colour = "darkblue")
   xgraph <- xgraph + ggplot2::labs(x = lab, y = paste0("Number of events per 1/", 
                                                        1/second_fraction, " of a second"))
@@ -353,13 +391,13 @@ bead_normalize <- function(flow_frame,
   
   # normalize the data and remove beads
   dat_norm <- CATALYST::normCytof(x = dat,
-                        beads = beads,
-                        remove_beads = remove_beads,
-                        norm_to = norm_to_ref,
-                        k = k,
-                        plot = TRUE, 
-                        transform = FALSE, 
-                        ...)
+                                  beads = beads,
+                                  remove_beads = remove_beads,
+                                  norm_to = norm_to_ref,
+                                  k = k,
+                                  plot = TRUE, 
+                                  transform = FALSE, 
+                                  ...)
  
   # convert back to .fcs files and save 
   f <- CATALYST::sce2fcs(dat_norm$data)
@@ -381,6 +419,9 @@ bead_normalize <- function(flow_frame,
            plot = p, limitsize = FALSE)
    
   }
+  
+  f@description$FILENAME <- basename(flow_frame@description$FILENAME)
+  f@description$FIL <- basename(flow_frame@description$FILENAME)
   
   return(f)
 }
@@ -482,14 +523,16 @@ plot_marker_quantiles <- function(files_before_norm,
   }
   
   if(is.null(uncommon_prefix)){
-    quantiles$Sample <- gsub("Norm_", "", 
-                             gsub("_CC_gated.fcs|_gated.fcs|_beadNorm.fcs|.FCS|.fcs",
-                                  "", basename(as.character(quantiles$File))))
+    quantiles$Sample <- gsub(pattern = "Norm_", replacement = "", ignore.case = TRUE,
+                             x = gsub(pattern = "_CC_gated.fcs|_gated.fcs|_beadNorm.fcs|.FCS|.fcs",
+                                  replacement = "", ignore.case = TRUE,
+                                  x = basename(as.character(quantiles$File))))
   } else {
     uncommon_prefix <- paste(uncommon_prefix, collapse = ("|"))
-    quantiles$Sample <- gsub("Norm_", "", 
-                             gsub(uncommon_prefix,
-                                  "", basename(as.character(quantiles$File))))
+    quantiles$Sample <- gsub(pattern = "Norm_", replacement = "", ignore.case = TRUE,
+                             x = gsub(pattern = uncommon_prefix, replacement = "", 
+                                      ignore.case = TRUE,
+                                      x =  basename(as.character(quantiles$File))))
   }
   
   ncols <- length(unique(quantiles$Batch))
@@ -700,10 +743,10 @@ aof_scoring <- function(fcs_files,
     phenotyping_channels <- grep(paste(phenotyping_markers, 
                                        collapse = ("|")), markers, value = TRUE)
     
-   if(length(grep("Ir", phenotyping_channels)) > 1){
-     phenotyping_channels <- phenotyping_channels[-(grep("Ir", 
-                                                         phenotyping_channels)[2])]
-   }
+    if(length(grep("Ir", phenotyping_channels)) > 1){
+      phenotyping_channels <- phenotyping_channels[-(grep("Ir", 
+                                                          phenotyping_channels)[2])]
+    }
   }
   
   aof_scores <- matrix(NA,
@@ -843,7 +886,7 @@ file_quality_check <- function(fcs_files,
                        arcsine_transform = arcsine_transform,
                        nClus = nClus,
                        batch = batch, ...)
-      
+    
       scores[[batch]] <- aof_scoring(fcs_files = files, phenotyping_markers = phenotyping_markers,
                                      fsom = fsom, out_dir = out_dir, batch = batch)
     }
@@ -1059,8 +1102,6 @@ aggregate_files <- function(fcs_files,
   flowFrame@description[[paste("$P", ncol(flowFrame), "B", 
                                sep = "")]] <- 32
   flowFrame@description$FIL <- gsub(".*/", "", outputFile)
-  
-  #write.FCS.corrected(flowFrame, filename = outputFile, endian = "big")
   
   if(write_agg_file == TRUE){
     
@@ -1476,7 +1517,7 @@ make_breaks <- function(event_per_flow_frame, total_events){
   return(list("breaks"=breaks, "events_per_flowframe"=event_per_flow_frame))
 }
 
-#'@description Calculates begining and end of each flow frame
+#'@description Calculates beginning and end of each flow frame
 split_flowFrames <- function(vec, seg.length) {
   starts=seq(1, length(vec), by=seg.length)
   ends  = starts + seg.length - 1
