@@ -168,7 +168,7 @@ plot_flowrate <- function (FlowRateQC, data_type = "MC")
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5, default is set to TRUE
 #' @param non_used_bead_ch Character vector, bead channels that does not contain 
-#' any marker information, thus do not need to be cleaned andused for further analysis
+#' any marker information, thus do not need to be cleaned and used for further analysis
 #' @param ... Additional arguments to pass to flowcut.
 #' @param MaxPercCut As in flowCut, numeric between 0-1 the maximum percentage of 
 #' event tha will be removed form the data. 
@@ -426,6 +426,31 @@ bead_normalize <- function(flow_frame,
   return(f)
 }
 
+
+#' Title 
+#'
+#' @description removes beads from the files that contain them e.g files before
+#' bead normalization
+#'
+#' @param bead_channel character, the mass for bead channel that is exclusively used for 
+#' beads identification, no marker is present at this channel, default 140.
+#' @param flow_frame Flow frame, if unstransformed arcsine_transform should be 
+#' kept as default, TRUE.
+#'
+#' @return flow frame without beads removed 
+gate_out_beads <- function(bead_channel, 
+                           flow_frame){
+  ch <- grep(pattern = bead_channel, x = colnames(flow_frame), value = TRUE)
+  ids <- flow_frame[,ch] > 0
+  # calculate threshold 
+  th <- deGate(obj = flow_frame[ids,], channel = ch)
+  #remove beads 
+  cells_to_remove <- flow_frame@exprs[, ch] < th
+  flow_frame <- flow_frame[cells_to_remove,]
+  return(flow_frame)
+}
+
+
 #' @description Calculates quantiles for selected markers and plots them as 
 #' diagnostic plot 
 #' @param files_before_norm Character, full path to the unnormalized fcs_files.
@@ -436,6 +461,11 @@ bead_normalize <- function(flow_frame,
 #' needs to be removed. If NULL prefix like 
 #' "Norm|_CC_gated.fcs|_gated.fcs|_beadNorm.fcs|.FCS|.fcs" will be removed. 
 #' Default is set to NULL.
+#' @param bead_channel character, the mass for bead channel that is exclusively used for 
+#' beads identification, no marker is present at this channel, default 140.
+#' @param remove_beads logical, if beads needs to be removed. This needs to be 
+#' set to TRUE if files contains the beads e.g before beads normalization, 
+#' default is set to TRUE
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5.
 #' @param markers_to_plot character vector, marker names to be plotted, can be 
@@ -451,6 +481,8 @@ bead_normalize <- function(flow_frame,
 plot_marker_quantiles <- function(files_before_norm,
                                   files_after_norm, 
                                   batch_pattern,
+                                  remove_beads = FALSE,
+                                  bead_channel = "140", 
                                   uncommon_prefix = NULL, 
                                   arcsine_transform = TRUE, 
                                   markers_to_plot = NULL, 
@@ -505,6 +537,12 @@ plot_marker_quantiles <- function(files_before_norm,
     if(arcsine_transform == TRUE){
       ff <- flowCore::transform(ff, transformList(grep("Di", colnames(ff), value = TRUE),
                                         arcsinhTransform(a = 0, b = 1/5, c = 0)))
+    }
+    
+    norm <- quantiles$Normalization[(which(quantiles$File == file)[1])]
+    
+    if(norm == "NO" & remove_beads){
+      ff <- gate_out_beads(bead_channel = bead_channel, flow_frame = ff)
     }
     
     for (marker in names(norm_markers)) {
@@ -1042,7 +1080,8 @@ debarcode_files <- function(fcs_files,
 #' default is set to NULL
 #' @param write_agg_file Logicle, if the fcs files should be saved, if TRUE 
 #' files will be saved in getwd(). Default set to FALSE
-#' @out_dir 
+#' @param out_dir Character, pathway to where the files should be saved, 
+#' only if argument to_plot = TRUE, default is set to working directory
 #' @return aggregated flow frame 
 
 aggregate_files <- function(fcs_files, 
@@ -1105,7 +1144,7 @@ aggregate_files <- function(fcs_files,
   
   if(write_agg_file == TRUE){
     
-     flowCore::write.FCS(flowFrame, filename = file.path(out_dir, outputFile), endian = "big")
+     flowCore::write.FCS(x = flowFrame, filename = file.path(out_dir, outputFile), endian = "big")
   }
 
   return(flowFrame)
@@ -1529,17 +1568,18 @@ split_flowFrames <- function(vec, seg.length) {
 #' @description Split the big flow frames into smaller ones
 #' @param flow_frame flow frame
 #' @param event_per_flow_frame numeric, the number of events to be split to 
-#' small flow frames, default is set to 500 000  
-#' @param total_events numeric, total events in the flow frame, can be calculated by 
-#' nrow(flow_frame)
+#' small flow frames, default is set to 500000  
+#' @param min_cell_per_fcs numeric, minimal number of cells in flow frame 
+#' to save fcs file, default 20000
 #' @param out_dir Character, pathway to where the files should be saved, 
 #' default is set to working directory.
 
 split_big_flowFrames <- function(flow_frame, 
                                  event_per_flow_frame = 500000, 
-                                 total_events, 
-                                 out_dir = getwd()){
+                                 out_dir = getwd(), 
+                                 min_cell_per_fcs = 20000){
   
+  total_events <- nrow(flow_frame)
   res_breaks <- make_breaks(event_per_flow_frame, total_events)
   
   for (i in as.numeric((names(res_breaks$breaks)))) {
@@ -1548,9 +1588,13 @@ split_big_flowFrames <- function(flow_frame,
     if (i < 10) {
       num <- paste0("0", i)       
     }
-    write.FCS(flow_frame[id, ], 
+    
+    if(nrow(flow_frame[id, ]) > min_cell_per_fcs){
+      write.FCS(flow_frame[id, ], 
               file.path(out_dir, gsub(".fcs|.FCS", 
-                                      paste0("_", num, ".fcs"), flow_frame@description$ORIGINALGUID)))      
+                                      paste0("_", num, ".fcs"), flow_frame@description$ORIGINALGUID)))    
+    }
+      
   }    
 }
 
