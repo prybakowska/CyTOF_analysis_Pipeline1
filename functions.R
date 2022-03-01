@@ -1,8 +1,10 @@
 
 #' @description Finds all the mass channels
+#' 
 #' @param flow_frame Untransformed flow frame
 #' @param channels Pattern for non-mass channels
 #' @param ... Additional arguments to pass to grep
+#' 
 #' @return Logical vector with TRUE values for mass channels
 
 check <- function(x) tryCatch(if(class(x) == 'logical') 1 else 1, 
@@ -54,6 +56,7 @@ flow_rate_bin_addapted <- function (x, second_fraction = 0.1, timeCh = timeCh, t
 
 
 #' @description Cleans the flow rate using functions from flowAI package.
+#' 
 #' @param flow_frame Untransformed flow frame
 #' @param to_plot Logical if to plot cleaning results, default is set to TRUE.
 #' @param out_dir Character, pathway to where the plots should be saved, 
@@ -62,6 +65,7 @@ flow_rate_bin_addapted <- function (x, second_fraction = 0.1, timeCh = timeCh, t
 #' significance level used to accept anomalies. The default value is 0.01.
 #' @param data_type Character, if MC (mass cytometry) of FC (flow cytometry) data 
 #' are analyzed
+#' 
 #' @return Clean, untransformed flow frame and save the plot _beadNorm_flowAI.png
 #'  in out_dir 
 
@@ -288,12 +292,14 @@ clean_signal <- function(flow_frame,
 #' @param ... Additional arguments to pass to normCytof
 #' @param ncells number of cells to be aggregated per each file, 
 #' default is set to 25000, so around 250 beads can be aggregated per each file 
+#' @seed seed to be set to obtain reproducible results, 
+#' default is set to 654
 #' @return returns reference, aggregated flow frame 
 
 baseline_file <- function(fcs_files, beads = "dvs", to_plot = FALSE, 
-                       out_dir = getw(), k = 80, ncells = 25000, ...){
+                       out_dir = getw(), k = 80, ncells = 25000, seed = 2, ...){
 
-  set.seed(2)
+  set.seed(seed)
   ff <- FlowSOM::AggregateFlowFrames(fileNames = fcs_files, 
                             cTotal = length(fcs_files)*ncells)
   
@@ -637,7 +643,8 @@ fsom_aof <- function(fcs_files,
                      nClus = 10,
                      out_dir, 
                      batch = NULL,
-                     arcsine_transform = TRUE){
+                     arcsine_transform = TRUE, 
+                     seed = 1){
   
   
   if(check(phenotyping_channels) == 0){
@@ -655,7 +662,7 @@ fsom_aof <- function(fcs_files,
   
   fsom <- CytoNorm::prepareFlowSOM(file = fcs_files,
                                    colsToUse = names(phenotyping_channels),
-                                   seed = 1, 
+                                   seed = seed, 
                                    nCells = nCells,
                                    transformList = trans,
                                    FlowSOM.params = list(xdim = xdim, 
@@ -686,7 +693,7 @@ fsom_aof <- function(fcs_files,
                                  backgroundValues = fsom$metaclustering, 
                                  maxNodeSize = 3,
                                  backgroundColors = backgroundColors)
-  fsomTsne <- FlowSOM::PlotDimRed(fsom = fsom, plotFile = NULL, seed = 2, cTotal = 20000,  
+  fsomTsne <- FlowSOM::PlotDimRed(fsom = fsom, plotFile = NULL, seed = seed, cTotal = 20000,  
                                   title = "tSNE visualization of FlowSOM metaclusters")
   
   figure <- ggarrange(fsomPlot, fsomTsne,
@@ -1229,7 +1236,132 @@ gate_intact_cells <- function(flow_frame,
   return(ff)
 }
 
+
+#' Title
+#'
+#' @param flow_frame 
+#' @param channels 
+#' @param n_mad 
+#' @param mad_f 
+#' @param plot 
+#' @param center 
+#' @param main 
+#' @param ... 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+remove_mad_outliers <- function(flow_frame, 
+                                channels = c("Ir193Di", "Ir191Di"), 
+                                n_mad = 2,
+                                mad_f = mad,
+                                plot = TRUE,
+                                center = "center",
+                                main = "",
+                                ...){
+  boundaries <- matrix(NA,
+                       nrow = 5,
+                       ncol = length(channels),
+                       dimnames = list(c("median", "center", "mad", "l_lim", "u_lim"),
+                                       channels))
+  for (channel in channels) {
+    x <- flow_frame@exprs[, channel]
+    boundaries["median", channel] <- median(x)
+    boundaries["center", channel] <- density(x)$x[which.max(density(x)$y)]
+    boundaries["mad", channel] <- mad_f(x,
+                                        center = boundaries[center, channel] )
+    boundaries["l_lim", channel] <- boundaries[center, channel] - n_mad * boundaries["mad", channel]
+    boundaries["u_lim", channel] <- boundaries[center, channel] + n_mad * boundaries["mad", channel]
+  }
+  
+  selection <- rep(TRUE, nrow(flow_frame))
+  for (channel in channels) {
+    selection <- selection & (flow_frame@exprs[, channel] > boundaries["l_lim", channel])
+    selection <- selection & (flow_frame@exprs[, channel] < boundaries["u_lim", channel])
+  }
+  percentage <- (sum(selection)/length(selection))*100
+  if (plot) {
+    flowDensity::plotDens(flow_frame, 
+                          c(channels, "Ir191Di"), 
+                          main = paste0(main, " ( ", format(round(percentage, 2), 
+                                                            nsmall = 2), "% )"),
+                          ...)
+    if(length(channels) == 2) {
+      points(flow_frame@exprs[!selection, channels], col = "red", pch = ".")
+      abline(v = boundaries[c("l_lim", "u_lim"), channels[1]], col = "grey")
+      abline(h = boundaries[c("l_lim", "u_lim"), channels[2]], col = "grey")
+    } else if(length(channels) == 1) {
+      points(flow_frame@exprs[!selection, c(channels, "Ir191Di")], pch = ".")
+      abline(v = boundaries[c("l_lim", "u_lim"), channels[1]], col = "grey")
+    }
+  }
+  
+  return(selection)
+}
+
+
+#' Title
+#'
+#' @param flow_frame flow frame
+#' @param channels character, channels name to be used for gating, default is 
+#' to Event_length
+#' @param arcsine_transform Logical, if the data should be transformed with 
+#' arcsine transformation and cofactor 5.
+#' @param main 
+#' @param file_name 
+#' @param n_mad 
+#' @param ... 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+gate_singlet_cells <- function(flow_frame, 
+                               channels = "Event_length", 
+                               arcsine_transform = TRUE,
+                               file_name = NULL,
+                               n_mad = 2,
+                               ...){
+  
+  if (is.null(file_name)){
+    file_name <- flow_frame@description$FIL
+  } else {
+    file_name 
+  }
+  
+  if(arcsine_transform == TRUE){
+    
+    flow_frame_t <- flowCore::transform(flow_frame, 
+                                        flowCore::transformList(colnames(flow_frame)[grep("Di", colnames(flow_frame))], 
+                                                                CytoNorm::cytofTransform))
+  } else {
+    flow_frame_t <- flow_frame
+  }
+  
+  selection <- matrix(TRUE,
+                      nrow = nrow(flow_frame),
+                      ncol = 1,
+                      dimnames = list(NULL,
+                                      c("singlets")))  
+  
+  selection[, "singlets"] <- remove_mad_outliers(flow_frame = flow_frame_t, 
+                                                 channels = channels,
+                                                 main = paste("Singlets", file_name),
+                                                 n_mad = n_mad,
+                                                 xlim = c(0, 100), ylim = c(0, 8))
+  
+  flow_frame <- flow_frame[selection[,"singlets"], ]
+  
+  return(flow_frame)
+  
+}
+
+
+
+
 #' @description Performs gating of live cells using flowDensity package
+#' 
 #' @param flow_frame Character, full path to fcs_file.
 #' @param file_name Character, the file name used only for plotting, if NULL
 #' the file name stored in keyword GUID.original will be used, default is set to NULL
@@ -1243,6 +1375,7 @@ gate_intact_cells <- function(flow_frame,
 #' @param alpha_Iridium the same as in alpha_viability but for the Iridium
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5.
+#' 
 #' @return flow frame with live cells
 
 gate_live_cells <- function(flow_frame, 
@@ -1257,7 +1390,7 @@ gate_live_cells <- function(flow_frame,
   ff <- flow_frame
   
   if (is.null(file_name)){
-    file_name <- ff@description$GUID.original
+    file_name <- ff@description$FIL
   } else {
     file_name 
   }
@@ -1312,7 +1445,7 @@ gate_live_cells <- function(flow_frame,
       selection[ff_t@exprs[,m] > tr[[m]][2], "live"] <- FALSE  
     }
   }
-  percentage <- (sum(selection[,"live"])/sum(selection))*100  
+  percentage <- (sum(selection)/length(selection))*100
   flowDensity::plotDens(ff_t, c(v_ch, "Ir191Di"), 
                         main = paste0(file_name," ( ", format(round(percentage, 2), nsmall = 2), "% )"),
                         xlim = c(0, 8), ylim = c(0, 8))
@@ -1351,7 +1484,8 @@ plot_batch <- function(files_before_norm ,
                        arcsine_transform = TRUE,
                        batch_pattern = "RUN[0-9]*",
                        manual_colors = NULL, 
-                       cells_total = 1000){
+                       cells_total = 1000,
+                       seed = 789){
   
   files_list <- list("files_before_norm" = files_before_norm, 
                      "files_after_norm" = files_after_norm)
@@ -1359,7 +1493,7 @@ plot_batch <- function(files_before_norm ,
   plots <- list()
   for (name in names(files_list)) {
     
-    set.seed(1)
+    set.seed(seed)
     ff_agg <- FlowSOM::AggregateFlowFrames(fileNames = files_list[[name]],
                                            cTotal = length(files_list[[name]]) * cells_total,
                                            verbose = TRUE,
@@ -1385,11 +1519,11 @@ plot_batch <- function(files_before_norm ,
       x
     })
     
-    set.seed(1)
+    set.seed(seed)
     samp <- length(files_list[[name]])
     ff_samp <- ff_agg@exprs[sample(nrow(ff_agg@exprs), samp*cells_total), ]
     
-    set.seed(123)
+    set.seed(seed)
     dimred_res <- uwot::umap(X = ff_samp[, names(cl_markers)], 
                              n_neighbors = 15, scale = TRUE)
     
@@ -1442,6 +1576,62 @@ plot_batch <- function(files_before_norm ,
   dev.off()
 }
 
+
+#' @description construct data frame for plotting cell frequencies and MSI 
+#' per clusters and metaclusters obtaind from FlowSOM clustering 
+#' 
+#' @param frequency_msi_list list containing matrices with cell frequency and msi
+#' obstained in step extract_pctgs_msi_per_flowsom
+#' @param matrix_type the name of the matrix to be plotted
+#' @param seed seed to be set to obtain reproducible results, 
+#' default is set to 654
+#' @param n_neighbours The size of local neighborhood in UMAP analysis 
+#'
+#' @return data frame for plotting 
+prepare_data_for_plotting <- function(frequency_msi_list,
+                                      matrix_type,
+                                      seed = 654,
+                                      n_neighbours = 14){
+  print(matrix_type)
+  
+  # set the number of closest neighborhoods 
+  n <- n_neighbours
+  
+  # process files before normalization
+  df_b <- frequency_msi_list[["before"]][[matrix_type]]
+  
+  # select the columns for which MSI is higher than 0.2 SD
+  if(grepl("mfi", matrix_type)){
+    id_cols <-  which(apply(df_b, 2, sd) > 0.2)
+    df_b <- df_b[,id_cols]
+  }
+  
+  # build UMAP for files before the normalization
+  set.seed(seed)
+  df_b_umap <- data.frame(umap(df_b, n_neighbors = n, scale = T))
+  
+  # process files after normalization
+  df_a <- frequency_msi_list[["after"]][[matrix_type]]
+  
+  # select the columns for which MSI is higher than 0.2 SD
+  if(grepl("mfi", matrix_type)){
+    id_cols <-  which(apply(df_a, 2, sd) > 0.2)
+    df_a <- df_a[,id_cols]
+  }
+  
+  # build UMAP for files after the normalization
+  set.seed(seed)
+  df_a_umap <- data.frame(umap(df_a, n_neighbors = n, scale = T))
+  
+  # extract rownames to use the for ggplot annotation
+  rnmes <- c(rownames(df_b), rownames(df_a))
+  
+  #join two UMAP data frames
+  dr <- data.frame(rbind(df_b_umap, df_a_umap), check.names = F)
+  colnames(dr) <- c("dim1", "dim2")
+  return(dr)
+}
+
 #' @description Builds UMAP on aggregated flow frame 
 #' @param fcs_files Character, full path to fcs_files.
 #' @param clustering_markers Character vector, marker names to be used for clustering,
@@ -1455,6 +1645,8 @@ plot_batch <- function(files_before_norm ,
 #' @param arcsine_transform arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5, default is set to TRUE
 #' @param cells_total numeric, number of cells taken from each file to buil UMAP 
+#' @param seed seed to be set to obtain reproducible results, 
+#' default is set to 1
 #' @return data frame with UMAP coordinates
  
 UMAP <- function(fcs_files, 
@@ -1463,9 +1655,10 @@ UMAP <- function(fcs_files,
                  out_dir = getwd(), 
                  batch_pattern = "day[0-9]*", 
                  arcsine_transform = TRUE, 
-                 cells_total = 1000){
+                 cells_total = 1000, 
+                 seed = 1){
   
-  set.seed(1)
+  set.seed(seed)
   ff_agg <- FlowSOM::AggregateFlowFrames(fileNames = fcs_files,
                                          cTotal = length(fcs_files) * cells_total,
                                          verbose = TRUE,
@@ -1491,7 +1684,7 @@ UMAP <- function(fcs_files,
     x
   })
   
-  set.seed(123)
+  set.seed(seed)
   dimred_res <- uwot::umap(X = ff_agg@exprs[, names(cl_markers)], 
                            n_neighbors = 15, scale = TRUE)
   
@@ -1601,6 +1794,7 @@ split_big_flowFrames <- function(flow_frame,
 
 #' @description performs FlowSOM clustering and extracts cluster and metacluster 
 #' frequency and MSI 
+#'
 #' @param file_list list, pathway to the files before and after normalization 
 #' @param nCells Numeric, number of cells to be cluster per each file, 
 #' default is set to 50 000
@@ -1615,10 +1809,15 @@ split_big_flowFrames <- function(flow_frame,
 #' @param n_metaclusters Numeric, exact number of clusters for metaclustering 
 #' in FlowSOM, default is set to 35
 #' @param out_dir Character, pathway to where the FlowSOM clustering plot should
-#'  be saved, default is set to working directory.
-#' @seed seed to be et to obtain reproducible results, default is set to 789
-#' @arcsine_transform arcsine_transform Logical, if the data should be transformed with 
+#' @param seed seed to be set to obtain reproducible results, default is set to 789
+#' @param arcsine_transform arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5, default is set to TRUE
+#' be saved, default is set to working directory.
+#'  
+#' @return list of four matrices that contain calculation for 
+#' cl_pctgs (cluster percentages), mcl_pctgs (metaclusters percentages), 
+#' cl_msi (cluster MSIs for selected markers), mcl_msi (metaclusters MSI
+#' for selected markers)
 
 extract_pctgs_msi_per_flowsom <- function(file_list, 
                                           nCells = 50000, 
@@ -1636,7 +1835,7 @@ extract_pctgs_msi_per_flowsom <- function(file_list,
 
     nCells <- length(file_list[[f]]) * 50000
     print(paste("aggregating files for", f, "normalization"))
-    set.seed(123)
+    set.seed(seed)
     ff_agg <- FlowSOM::AggregateFlowFrames(fileNames = file_list[[f]],
                                   cTotal = nCells,
                                   writeOutput = F,
@@ -1672,7 +1871,7 @@ extract_pctgs_msi_per_flowsom <- function(file_list,
                              ydim = ydim)
     
     fsomPlot <- FlowSOM::PlotStars(fsom, backgroundValues = fsom$metaclustering)
-    fsomTsne <- FlowSOM::PlotDimRed(fsom = fsom, cTotal = 5000, seed = 2)
+    fsomTsne <- FlowSOM::PlotDimRed(fsom = fsom, cTotal = 5000, seed = s)
     
     figure <- ggarrange(fsomPlot, fsomTsne,
                         # labels = c("FlowSOM clustering", "tsne"),
@@ -1696,12 +1895,12 @@ extract_pctgs_msi_per_flowsom <- function(file_list,
     mfi_mc_names <- apply(expand.grid(paste0("MC", 1:nClus),
                                       FlowSOM::GetMarkers(ff_agg, c(phenotyping_channels,functional_channels))),
                           1, paste, collapse = "_")
-    mfi_cl <- matrix(NA,
+    cl_msi <- matrix(NA,
                      nrow = length(file_list[[f]]),
                      ncol = fsom$map$nNodes * length(names(c(phenotyping_channels,
                                                              functional_channels))),
                      dimnames = list(basename(file_list[[f]]), mfi_cl_names))
-    mfi_mcl <- matrix(NA,
+    mcl_msi <- matrix(NA,
                       nrow = length(file_list[[f]]),
                       ncol =  length(mfi_mc_names),
                       dimnames = list(basename(file_list[[f]]), mfi_mc_names))
@@ -1725,22 +1924,22 @@ extract_pctgs_msi_per_flowsom <- function(file_list,
       mcl_pctgs[file,] <- tapply(cl_pctgs[file,], fsom$metaclustering, sum)
       
       cluster_mfis <- FlowSOM::GetClusterMFIs(fsom_subset)
-      mfi_cl[file,] <- as.numeric(cluster_mfis[,names(c(phenotyping_channels,functional_channels))])
+      cl_msi[file,] <- as.numeric(cluster_mfis[,names(c(phenotyping_channels,functional_channels))])
       mcluster_mfis <- as.matrix(FlowSOM::GetMetaclusterMFIs(list(FlowSOM = fsom_subset,
                                                      metaclustering = fsom$metaclustering)))
-      mfi_mcl[file,] <- as.numeric(mcluster_mfis[,names(c(phenotyping_channels,functional_channels))])
+      mcl_msi[file,] <- as.numeric(mcluster_mfis[,names(c(phenotyping_channels,functional_channels))])
       
     }
     
     # impute 0 values for NAs
-    mfi_cl_imp <- apply(mfi_cl, 2,
+    mfi_cl_imp <- apply(cl_msi, 2,
                         function(x){
                           missing <- which(is.na(x))
                           x[missing] <- 0
                           x
                         })
     
-    mfi_mcl_imp <- apply(mfi_mcl, 2,
+    mfi_mcl_imp <- apply(mcl_msi, 2,
                          function(x){
                            missing <- which(is.na(x))
                            x[missing] <- 0
@@ -1750,8 +1949,8 @@ extract_pctgs_msi_per_flowsom <- function(file_list,
     # store the matrices in the list for convenient plotting 
     all_mx <- list("cl_pctgs" = cl_pctgs,
                    "mcl_pctgs" = mcl_pctgs,
-                   "mfi_cl" = mfi_cl_imp,
-                   "mfi_mcl" = mfi_mcl_imp)
+                   "cl_msi" = mfi_cl_imp,
+                   "mcl_msi" = mfi_mcl_imp)
     
     saveRDS(all_mx, file.path(out_dir, paste0(f, "_calculated_features.RDS")))
     res[[f]] <- all_mx

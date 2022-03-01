@@ -262,12 +262,20 @@ for (i in seq_len(nrow(md))){
 # Files gating -----------------------------------------------------------------
 #-------------------------------------------------------------------------------
 
-# open cytofcelan GUI and select the file that you want to gate, 
-# de-select bead removal 
-cytofclean::cytofclean_GUI()
+# If Gaussian parameters needs to be gated use cytofclean, remember 
+# to de-select beads removal and change input directory in step "List files for gating"
+# to cytof_clean_dir. In this case skip also the gating for gate_singlet_cells
+# if Gaussian gating is not required proceed to step "Set input directory" and follow 
+# the pipeline 
+
+# cytofclean::cytofclean_GUI()
+
+# Set input directory if gating for Gaussian parameters
+# cytof_clean_dir <- file.path(dir, "Aggregated", "CyTOFClean")
+# or 
 
 # Set input directory 
-cytof_clean_dir <- file.path(dir, "Aggregated", "CyTOFClean")
+aggregate_dir <- file.path(dir, "Aggregated")
 
 # Set output directory 
 gate_dir <- file.path(dir, "Gated")
@@ -276,7 +284,7 @@ if (!dir.exists(gate_dir)) {
 }
 
 # List files for gating 
-files <- list.files(aggregate_dir, 
+files <- list.files(path = aggregate_dir, 
                     pattern = ".fcs$", 
                     full.names = TRUE)
 
@@ -431,75 +439,42 @@ all_files <- list("before" = files_before_norm,
 mx <- extract_pctgs_msi_per_flowsom(file_list = all_files, 
                                     nCells = 50000, 
                                     phenotyping_markers =  c("CD", "HLA", "IgD"),
-                                    functional_markers = c("MIP", "MCP", "IL", "IFNa", "TNF", "TGF", "Gr"),
+                                    functional_markers = c("MIP", "MCP", "IL", 
+                                                           "IFNa", "TNF", "TGF", 
+                                                           "Gr"),
                                     xdim = 10, 
                                     ydim = 10, 
                                     n_metaclusters = 35, 
                                     out_dir = norm_dir, 
                                     arcsine_transform = TRUE)
 
-# perform dimensional reduction and plot the data 
-before <- mx[["before"]]
-after <- mx[["after"]]
-
 # set title for each plot
-title_gg <- c("Clusters frequency" = "cl_pctgs",
-              "Metaclusters frequency" = "mcl_pctgs",
-              "Clusters MSI" = "mfi_cl",
-              "Metaclusters MSI" = "mfi_mcl")
+title_gg <- c("Cluster frequencies" = "cl_pctgs",
+              "Metacluster frequencies" = "mcl_pctgs",
+              "Cluster MSIs" = "cl_msi",
+              "Metacluster MSIs" = "mcl_msi")
 
 # create the list to store the plots
 plots <- list()
-for (name in c("cl_pctgs","mcl_pctgs","mfi_cl","mfi_mcl")){
-  print(name)
-  
-  # set the number of closest neighborhoods 
-  n <- 14
-  
-  # process files before normalization
-  df_b <- before[[name]]
-  
-  # select the columns for which MSI is higher than 0.2 SD
-  if(grepl("mfi", name)){
-    id_cols <-  which(apply(df_b, 2, sd) > 0.2)
-    df_b <- df_b[,id_cols]
-  }
-  
-  # build UMAP for files before the normalization
-  set.seed(654)
-  df_b_umap <- data.frame(umap(df_b, n_neighbors = n, scale = T))
-  
-  # process files after normalization
-  df_a <- after[[name]]
-  
-  # select the columns for which MSI is higher than 0.2 SD
-  if(grepl("mfi", name)){
-    id_cols <-  which(apply(df_a, 2, sd) > 0.2)
-    df_a <- df_a[,id_cols]
-  }
-  
-  # build UMAP for files after the normalization
-  set.seed(654)
-  df_a_umap <- data.frame(umap(df_a, n_neighbors = n, scale = T))
-  
-  # extract rownames to use the for ggplot annotation
-  rnmes <- c(rownames(df_b), rownames(df_a))
-  
-  #join two UMAP data frames
-  dr <- data.frame(rbind(df_b_umap, df_a_umap), check.names = F)
+for (i in seq_along(title_gg)){
+  df_plot <- prepare_data_for_plotting(frequency_msi_list = mx, 
+                                       matrix_type = title_gg[1],
+                                       n_neighbours = 11)
   
   # extract annotation for plotting
-  colnames(dr) <- c("dim1", "dim2")
-  dr$day <- str_match(rnmes, "day[0-9]*")[,1]
-  dr$reference <- ifelse(grepl("REF", rnmes),"ref", "")
-  dr$sample <- ifelse(grepl("p1", rnmes),"p1", ifelse(grepl("p2", rnmes), "p2", "ref"))
-  dr$stimulation <- str_match(rnmes, "RSQ|LPS|IMQ|CPG|UNS")
-  dr$normalization <- ifelse(grepl("Norm", rnmes),"Normalized", "Raw")
-  dr$normalization <- factor(dr$normalization, levels = c("Raw", "Normalized"))
-  
+  df_plot$day <- str_match(rownames(df_plot), "day[0-9]*")[,1]
+  df_plot$reference <- ifelse(grepl("REF", rownames(df_plot)),"ref", "")
+  df_plot$sample <- ifelse(grepl("p1", rownames(df_plot)),"p1", 
+                           ifelse(grepl("p2", rownames(df_plot)), "p2", "ref"))
+  df_plot$stimulation <- str_match(rownames(df_plot), "RSQ|LPS|IMQ|CPG|UNS")
+  df_plot$normalization <- factor(ifelse(grepl("Norm", rownames(df_plot)),
+                                         "Normalized", "Raw"), 
+                                  levels = c("Raw", "Normalized"))
+ 
   # plot
-  gg <- ggplot(dr, aes(x = dim1, y = dim2))+
-    geom_point(data=dr, aes_string(x="dim1", y="dim2", fill = "day", shape = "sample", color = "day"), 
+  gg <- ggplot(df_plot, aes(x = dim1, y = dim2))+
+    geom_point(data=df_plot, aes_string(x="dim1", y="dim2", fill = "day", 
+                                        shape = "sample", color = "day"), 
                size = 3)+
     facet_wrap(~normalization)+
     ggtitle(names(title_gg)[which(title_gg%in% name)])+
