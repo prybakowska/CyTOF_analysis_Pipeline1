@@ -1,4 +1,8 @@
 
+check <- function(x) tryCatch(if(class(x) == 'logical') 1 else 1, 
+                              error=function(e) 0)
+
+
 #' @description Finds all the mass channels
 #' 
 #' @param flow_frame Untransformed flow frame
@@ -6,9 +10,6 @@
 #' @param ... Additional arguments to pass to grep
 #' 
 #' @return Logical vector with TRUE values for mass channels
-
-check <- function(x) tryCatch(if(class(x) == 'logical') 1 else 1, 
-                              error=function(e) 0)
 
 find_mass_ch <- function(flow_frame, 
                          channels = "Time|Event_length|Center|Offset|Width|Residual|SSC|FSC|File_scattered",
@@ -19,7 +20,16 @@ find_mass_ch <- function(flow_frame,
   return(non_mass_ch)
 }
 
-# TODO description 
+
+#' flow_rate_bin_addapted
+#' 
+#' @param x flow frame
+#' @param second_fraction the fraction of the seconds used in the data 
+#' @param timeCh Time channel 
+#' @param timestep 
+#' 
+#' @return timeFlowData, the cell assignment to the bins
+
 flow_rate_bin_addapted <- function (x, second_fraction = 0.1, timeCh = timeCh, timestep = timestep) 
 {
   xx <- exprs(x)[, timeCh]
@@ -55,6 +65,8 @@ flow_rate_bin_addapted <- function (x, second_fraction = 0.1, timeCh = timeCh, t
 }
 
 
+#' clean_flow_rate
+#' 
 #' @description Cleans the flow rate using functions from flowAI package.
 #' 
 #' @param flow_frame Untransformed flow frame
@@ -68,7 +80,6 @@ flow_rate_bin_addapted <- function (x, second_fraction = 0.1, timeCh = timeCh, t
 #' 
 #' @return Clean, untransformed flow frame and save the plot _beadNorm_flowAI.png
 #'  in out_dir 
-
 clean_flow_rate <- function(flow_frame, to_plot = TRUE, 
                             out_dir = getwd(), alpha = 0.01, data_type = "MC") {
   
@@ -124,10 +135,14 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
 }
 
 
+#' plot_flowrate
+#' 
 #' @description plots flow rate for .fcs files
+#'
+#' @param data_type 
 #' @param FlowRateQC list obtained using flowAI:::flow_rate_check function
+#'
 #' @return xgraph plot 
-
 plot_flowrate <- function (FlowRateQC, data_type = "MC") 
 {
   if (data_type == "MC"){
@@ -156,7 +171,11 @@ plot_flowrate <- function (FlowRateQC, data_type = "MC")
   return(xgraph)
 }
 
+
+#' clean_signal
+#' 
 #' @description Cleans the signal using flowCut package
+#' 
 #' @param flow_frame Flow frame, if unstransformed arcsine_transform should be 
 #' kept as default, TRUE.
 #' @param channels_to_clean Character vector of the channels that needs to be cleaned
@@ -183,10 +202,10 @@ plot_flowrate <- function (FlowRateQC, data_type = "MC")
 #' @param AlwaysClean as in flowCut, logicle. The file will be cleaned even if it has a
 #' relatively stable signal. The segments that are 7 SD away from the mean of all
 #' segments are removed 
+#' 
 #' @return Cleaned, untransformed flow frame if arcsine_transform argument
 #' set to TRUE, otherwise transformed flow frame is returned. Save plots with prefix
 #' "flowCutCleaned.png" to out_dir if parameter to_plot set to "All" or "Flagged Only".
-
 clean_signal <- function(flow_frame, 
                          channels_to_clean = NULL, 
                          to_plot = "All", 
@@ -277,8 +296,11 @@ clean_signal <- function(flow_frame,
   return(ff_clean)
 }
 
+#' baseline_file
+#' 
 #' @description Creates the reference flowframe for which bead´s mean values will 
 #' be computed and use during the normalization.
+#'
 #' @param fcs_files Path to fcs files to be normalized
 #' @param beads The same as in normCytof from CATALYAST package, character variable:
 #'"dvs" (for bead masses 140, 151, 153 ,165, 175) or 
@@ -291,9 +313,9 @@ clean_signal <- function(flow_frame,
 #' median window used for bead smoothing (affects visualizations only!).
 #' @param ... Additional arguments to pass to normCytof
 #' @param ncells number of cells to be aggregated per each file, 
+#' @param seed numeric, set to obtain reproducible results, default 654
 #' default is set to 25000, so around 250 beads can be aggregated per each file 
-#' @seed seed to be set to obtain reproducible results, 
-#' default is set to 654
+#' 
 #' @return returns reference, aggregated flow frame 
 
 baseline_file <- function(fcs_files, beads = "dvs", to_plot = FALSE, 
@@ -334,8 +356,11 @@ baseline_file <- function(fcs_files, beads = "dvs", to_plot = FALSE,
   return(ff_ref)
 }
 
+#' bead_normalize
+#' 
 #' @description Performs bead normalization using function from CATALYST package.
 #' normalized fcs files and plots are stored in out_dir directory
+#'
 #' @param flow_frame Untranfosrmed flow frame.
 #' @param markers_to_keep Character vector, marker names to be kept after 
 #' the normalization, can be full marker name e.g. "CD45" or "CD". Additionally, 
@@ -348,15 +373,15 @@ baseline_file <- function(fcs_files, beads = "dvs", to_plot = FALSE,
 #' Default is set to "dvs"
 #' @param norm_to_ref flow frame, created by baseline_file function to which input data 
 #' will be normalized, default is set to NULL
-#' @param remove_beads, logicle, if beads should be removed after the normalization, 
-#' default is set to TRUE
 #' @param to_plot Logical if to plot bead gate and bead normalization lines for each 
 #' file.
 #' @param out_dir Character, pathway to where the plots should be saved, 
 #' only if argument to_plot = TRUE, default is set to working directory.
 #' @param k the same as in normCytof from CATALYST package, integer width of the 
 #' median window used for bead smoothing (affects visualizations only!).
+#' @param remove_beads 
 #' @param ... Additional arguments to pass to normCytof
+#'
 #' @return Bead normalized flow frame without the beads. Save plots to out_dir
 #'  if argument to_plot set to TRUE
 
@@ -433,7 +458,7 @@ bead_normalize <- function(flow_frame,
 }
 
 
-#' Title 
+#' gate_out_beads 
 #'
 #' @description removes beads from the files that contain them e.g files before
 #' bead normalization
@@ -456,9 +481,11 @@ gate_out_beads <- function(bead_channel,
   return(flow_frame)
 }
 
-
+#' plot_marker_quantiles
+#' 
 #' @description Calculates quantiles for selected markers and plots them as 
 #' diagnostic plot 
+#'
 #' @param files_before_norm Character, full path to the unnormalized fcs_files.
 #' @param files_after_norm Character, full path to the normalized fcs_files.
 #' @param batch_pattern Character, batch pattern to be match in the fcs file name
@@ -480,10 +507,10 @@ gate_out_beads <- function(bead_channel,
 #' the number of colors needs to be equal to the length of batch_pattern
 #' @param out_dir Character, pathway to where the plots should be saved, 
 #' default is set to working directory.
+#' 
 #' @return save the plots to out_dir with the name 
 #' "Marker distribution across aliquots and batches.pdf"
 
-# Plot diagnostic plot for markers across each run 
 plot_marker_quantiles <- function(files_before_norm,
                                   files_after_norm, 
                                   batch_pattern,
@@ -617,7 +644,10 @@ plot_marker_quantiles <- function(files_before_norm,
                  width = length(fcs_files)*0.25, height = length(norm_markers)*4, limitsize = F)
 }
 
+#' fsom_aof
+#' 
 #' @description Builds FlowSOM tree for the files scoring 
+#'
 #' @param fcs_files Character, full path to fcs_files.
 #' @param phenotyping_markers Character vector, marker names to be used for clustering,
 #' can be full marker name e.g. "CD45" or "CD" if all CD-markers needs to be plotted
@@ -633,6 +663,8 @@ plot_marker_quantiles <- function(files_before_norm,
 #' Pass to FlowSOM plot name, defult is set to NULL
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5. Default set to TRUE.
+#' @param seed numeric, set to obtain reproducible results, default 654
+#' 
 #' @return fsom object
 
 fsom_aof <- function(fcs_files, 
@@ -707,14 +739,18 @@ fsom_aof <- function(fcs_files,
   return(fsom)
 }
 
+#' scaled_aof_score
+#' 
 #' @description Calculates scaled AOF and sample quality AOF scores 
+#'
 #' @param aof_scores Matrix, array, Aof scores obtained using function 
 #' greedyCytometryAof from cytutils package 
 #' @param out_dir Character, pathway to where the FlowSOM clustering plot should
-#' be saved, default is set to working directory.
-#' @aof_channels Character, channels or markers for which aof was calculated
-#' @batch Character, aqusition batch for each fcs file.
+#' @param aof_channels Character, channels or markers for which aof was calculated
+#' @param batch Character, aqusition batch for each fcs file.
 #' Pass to FlowSOM plot name, defult is set to NULL
+#' be saved, default is set to working directory.
+#' 
 #' @return returns data frame with the scaled AOF scores
 
 scaled_aof_score <- function(aof_scores, out_dir, aof_channels, batch = NULL){
@@ -763,7 +799,10 @@ scaled_aof_score <- function(aof_scores, out_dir, aof_channels, batch = NULL){
   return(df)
 }
 
+#' aof_scoring
+#' 
 #' @description Calculates AOF (Average Overlap Frequency) scores 
+#'
 #' @param fcs_files Character, full path to fcs_files.
 #' @param phenotyping_markers Character vector, marker names to be used for 
 #' clustering, can be full marker name e.g. "CD45" or "CD" if all CD-markers 
@@ -773,6 +812,7 @@ scaled_aof_score <- function(aof_scores, out_dir, aof_channels, batch = NULL){
 #' be saved, default is set to working directory.
 #' @param batch Character, aqusition batch for each fcs file.
 #' Pass to AOF plot names, defult is set to NULL
+#' 
 #' @return returns data frame with the scaled AOF scores
 
 aof_scoring <- function(fcs_files,
@@ -822,15 +862,19 @@ aof_scoring <- function(fcs_files,
                    batch = batch)
 }
 
+#' file_outlier_detecion
+#' 
 #' @description Detects outlier files based on sample AOF score, generates plot 
 #' for outlier and .csv file which indicates which fcs files could be discarded 
 #' from further analysis
+#'
 #' @param scores list of scaled scores per aqusition batch or data frame of scaled scores,
 #' both generated by scaled_aof_score or aof_scoring function 
 #' @param out_dir Character, pathway to where the plot and .csv files with files
 #' quality scores should be saved, default is set to getwd(). 
 #' @param sd how many standard deviation should be use to detect outliers  
 #' only if argument to_plot = TRUE, default is set to working directory
+#' 
 #' @return plots Quality AOF scores for all files and save .RDS and .csv Quality 
 #' scores for further analysis, files are saved in out_dir 
 
@@ -886,8 +930,11 @@ file_outlier_detecion <- function(scores, out_dir = getwd(), sd) {
   write.csv(df_scores, file = file.path(out_dir, "Quality_AOF_score.csv"))
 }
 
+#' file_quality_check
+#' 
 #' @description wraper function to perform sample quality scoring, it will create 
 #' Quality control folder where all the quality plots and files will be stored.
+#'
 #' @param fcs_files Character, full path to fcs_files.
 #' @param file_batch_id Character vector, batch label for each fcs_file, 
 #'the order needs to be the same as in fcs_files.
@@ -902,9 +949,10 @@ file_outlier_detecion <- function(scores, out_dir = getwd(), sd) {
 #' arcsine transformation and cofactor 5.
 #' @param sd numeric, number of standard deviation allowed for file outlier
 #' detection, default = 3.
-#' @param nClus 
+#' @param nClus numeric, as in FlowSOM, numer of metaclusters to be obtained
 #' @param ... arguments to be passed to fsom_aof function for FlowSOM parameter 
 #' adjustment
+#' 
 #' @return plots Quality AOF scores for all files and save .RDS and .csv Quality 
 #' scores for further analysis, files are saved in out_dir 
 
@@ -932,17 +980,20 @@ file_quality_check <- function(fcs_files,
                        nClus = nClus,
                        batch = batch, ...)
     
-      scores[[batch]] <- aof_scoring(fcs_files = files, phenotyping_markers = phenotyping_markers,
+      scores[[batch]] <- aof_scoring(fcs_files = files, 
+                                     phenotyping_markers = phenotyping_markers,
                                      fsom = fsom, out_dir = out_dir, batch = batch)
     }
     
   } else {
     files <- fcs_files
     fsom <- fsom_aof(fcs_files = files, phenotyping_markers = phenotyping_markers, 
-                     out_dir = out_dir, arcsine_transform = arcsine_transform, nClus = nClus,
+                     out_dir = out_dir, arcsine_transform = arcsine_transform, 
+                     nClus = nClus,
                      batch = NULL)
     
-    scores <- aof_scoring(fcs_files = files, phenotyping_markers = phenotyping_markers,
+    scores <- aof_scoring(fcs_files = files, 
+                          phenotyping_markers = phenotyping_markers,
                           fsom = fsom, out_dir = out_dir, batch = NULL)
   }
   
@@ -950,7 +1001,10 @@ file_quality_check <- function(fcs_files,
                                        sd = sd)
 }
 
+#' debarcode_files
+#' 
 #' @description performs sample debarcoding 
+#'
 #' @param fcs_files Character, full path to fcs_files.
 #' @param file_batch_id Character vector, batch label for each fcs_file, 
 #' the order needs to be the same as in fcs_files.
@@ -970,6 +1024,7 @@ file_quality_check <- function(fcs_files,
 #' OR a vector of numeric masses corresponding to barcode channels. 
 #' When the latter is supplied, 'assignPrelim' will create a scheme of the
 #' appropriate format internally.
+#' 
 #' @return save debarcoded fcs files in out_dir. If parameter to_plot set 
 #' to TRUE save plots for yields and debarcode_quality in out_dir. If less_than_th 
 #' set to TRUE save file names with lower than the value set in threshold parameter 
@@ -1078,7 +1133,10 @@ debarcode_files <- function(fcs_files,
   }
 }
 
+#' aggregate_files
+#' 
 #' @description performs aggregation of debarcoded files
+#' 
 #' @param fcs_files Character, full path to fcs_files.
 #' @param channels_to_keep Character vector with channel names to be kept. 
 #' Default NULL
@@ -1089,6 +1147,7 @@ debarcode_files <- function(fcs_files,
 #' files will be saved in getwd(). Default set to FALSE
 #' @param out_dir Character, pathway to where the files should be saved, 
 #' only if argument to_plot = TRUE, default is set to working directory
+#' 
 #' @return aggregated flow frame 
 
 aggregate_files <- function(fcs_files, 
@@ -1157,11 +1216,14 @@ aggregate_files <- function(fcs_files,
   return(flowFrame)
 }
 
+#' gate_intact_cells
+#' 
 #' @description Performs gating of intact cells using flowDensity package
+#'
 #' @param flow_frame Character, full path to fcs_file.
 #' @param file_name Character, the file name used only for plotting, if NULL
 #' the file name stored in keyword GUID.original will be used, default is set to NULL
-#' @param tinypeak_removal1, numeric from 0-1, as in deGate to exclude/include 
+#' @param tinypeak_removal1 numeric from 0-1, as in deGate to exclude/include 
 #' tiny peaks in the head of the density distribution curve for both Iridium 
 #' channels
 #' @param tinypeak_removal2 the same as tinypeak_removal1 but for the tail 
@@ -1169,8 +1231,10 @@ aggregate_files <- function(fcs_files,
 #' @param alpha1 numeric, 0-1, as in deGate specify the significance of change 
 #' in the slope being detected at the head of the density distribution curve
 #' @param alpha2 the same as in alpha1 but for the tail of the density distribution curve
-#' @param arcsine_transform Logical, if the data should be transformed with 
-#' arcsine transformation and cofactor 5.
+#' @param arcsine_transform Logical, if the data should be transformed 
+#' with arcsine transformation and cofactor 5.
+#' @param ... 
+#' 
 #' @return flow frame with intact cells
 
 gate_intact_cells <- function(flow_frame, 
@@ -1237,23 +1301,24 @@ gate_intact_cells <- function(flow_frame,
 }
 
 
-#' Title
+#' remove_mad_outliers
+#'
+#' @description detects outliers in the selected channel(s) using MAD 
+#' (mean absolute deviation). 
 #'
 #' @param flow_frame 
-#' @param channels 
-#' @param n_mad 
-#' @param mad_f 
-#' @param plot 
+#' @param channels character, channel names used for gating, default is set to 
+#' "Event_length"
+#' @param n_mad numeric, how many MAD should be use to detect outliers 
+#' @param mad_f function used to compute deviation, default set to "mad" 
+#' @param plot logicle, if to plot the data, default TRUE
 #' @param center 
-#' @param main 
-#' @param ... 
+#' @param main character, title of the plot, default set to ""
+#' @param ... other arguments to pass plotDens
 #'
-#' @return
-#' @export
-#'
-#' @examples
+#' @return matrix with the selected cells 
 remove_mad_outliers <- function(flow_frame, 
-                                channels = c("Ir193Di", "Ir191Di"), 
+                                channels = "Event_length", 
                                 n_mad = 2,
                                 mad_f = mad,
                                 plot = TRUE,
@@ -1301,22 +1366,19 @@ remove_mad_outliers <- function(flow_frame,
 }
 
 
-#' Title
+#' gate_singlet_cells
 #'
 #' @param flow_frame flow frame
 #' @param channels character, channels name to be used for gating, default is 
 #' to Event_length
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5.
-#' @param main 
-#' @param file_name 
-#' @param n_mad 
-#' @param ... 
+#' @param file_name Character, the file name used only for plotting, if NULL
+#' the file name stored in keyword GUID.original will be used, default is set to NULL
+#' @param n_mad numeric, number of MADs to detect outliers
+#' @param ... arguments to pass to plotDens
 #'
-#' @return
-#' @export
-#'
-#' @examples
+#' @return flow frame with singlets 
 gate_singlet_cells <- function(flow_frame, 
                                channels = "Event_length", 
                                arcsine_transform = TRUE,
@@ -1349,7 +1411,7 @@ gate_singlet_cells <- function(flow_frame,
                                                  channels = channels,
                                                  main = paste("Singlets", file_name),
                                                  n_mad = n_mad,
-                                                 xlim = c(0, 100), ylim = c(0, 8))
+                                                 xlim = c(0, 100), ylim = c(0, 8), ...)
   
   flow_frame <- flow_frame[selection[,"singlets"], ]
   
@@ -1357,9 +1419,8 @@ gate_singlet_cells <- function(flow_frame,
   
 }
 
-
-
-
+#' gate_live_cells
+#' 
 #' @description Performs gating of live cells using flowDensity package
 #' 
 #' @param flow_frame Character, full path to fcs_file.
@@ -1375,6 +1436,7 @@ gate_singlet_cells <- function(flow_frame,
 #' @param alpha_Iridium the same as in alpha_viability but for the Iridium
 #' @param arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5.
+#' @param ... arguments to pass to plotDens function
 #' 
 #' @return flow frame with live cells
 
@@ -1448,7 +1510,7 @@ gate_live_cells <- function(flow_frame,
   percentage <- (sum(selection)/length(selection))*100
   flowDensity::plotDens(ff_t, c(v_ch, "Ir191Di"), 
                         main = paste0(file_name," ( ", format(round(percentage, 2), nsmall = 2), "% )"),
-                        xlim = c(0, 8), ylim = c(0, 8))
+                        xlim = c(0, 8), ylim = c(0, 8), ...)
   
   abline(h = tr[["Ir191Di"]])
   abline(v = tr[[v_ch]])
@@ -1461,7 +1523,10 @@ gate_live_cells <- function(flow_frame,
   
 }
 
+#' plot_batch
+#' 
 #' @description Plots batch effect using UMAP and clustering markers
+#'
 #' @param files_before_norm Character, full path to the unnormalized fcs_files.
 #' @param files_after_norm Character, full path to the normalized fcs_files.
 #' @param out_dir Character, pathway to where the plots should be saved, 
@@ -1474,8 +1539,11 @@ gate_live_cells <- function(flow_frame,
 #' @param batch_pattern Character, bach pattern to be match in the fcs file name
 #' @param manual_colors character, vector of the colors to be used, 
 #' the number of colors needs to be equal to the length of batch_pattern
+#' @param seed seed to be set to obtain reproducible results, 
+#' default is set to 789
 #' @param cells_total number of cells to plot per each file 
-#' @return save plots forbatch effect in the out_dir 
+#'
+#' @return save plots for batch effect in the out_dir 
 
 plot_batch <- function(files_before_norm , 
                        files_after_norm, 
@@ -1577,14 +1645,15 @@ plot_batch <- function(files_before_norm ,
 }
 
 
+#' prepare_data_for_plotting
+#' 
 #' @description construct data frame for plotting cell frequencies and MSI 
 #' per clusters and metaclusters obtaind from FlowSOM clustering 
 #' 
 #' @param frequency_msi_list list containing matrices with cell frequency and msi
 #' obstained in step extract_pctgs_msi_per_flowsom
 #' @param matrix_type the name of the matrix to be plotted
-#' @param seed seed to be set to obtain reproducible results, 
-#' default is set to 654
+#' @param seed numeric set to obtain reproducible results, default 654
 #' @param n_neighbours The size of local neighborhood in UMAP analysis 
 #'
 #' @return data frame for plotting 
@@ -1632,7 +1701,10 @@ prepare_data_for_plotting <- function(frequency_msi_list,
   return(dr)
 }
 
+#' UMAP
+#' 
 #' @description Builds UMAP on aggregated flow frame 
+#'
 #' @param fcs_files Character, full path to fcs_files.
 #' @param clustering_markers Character vector, marker names to be used for clustering,
 #' can be full marker name e.g. "CD45" or "CD" if all CD-markers needs to be plotted
@@ -1645,8 +1717,8 @@ prepare_data_for_plotting <- function(frequency_msi_list,
 #' @param arcsine_transform arcsine_transform Logical, if the data should be transformed with 
 #' arcsine transformation and cofactor 5, default is set to TRUE
 #' @param cells_total numeric, number of cells taken from each file to buil UMAP 
-#' @param seed seed to be set to obtain reproducible results, 
-#' default is set to 1
+#' @param seed numeric set to obtain reproducible results, default is set to 1
+#' 
 #' @return data frame with UMAP coordinates
  
 UMAP <- function(fcs_files, 
@@ -1720,10 +1792,14 @@ UMAP <- function(fcs_files,
   
 }
 
+#' manual_labels
+#' 
 #' @description Get the vector of manual labels for each cell
+#'
 #' @param manual_matrix matrix with TRUE and FALSE values for each cell and 
 #' each population name
 #' @param cell_types character, the cells of interest
+#'
 #' @return vector of manual labels for each cells 
 
 manual_labels <- function (manual_matrix, cell_types) 
@@ -1758,7 +1834,10 @@ split_flowFrames <- function(vec, seg.length) {
   lapply(seq_along(starts), function(i) vec[starts[i]:ends[i]])
 }
 
+#' split_big_flowFrames
+#' 
 #' @description Split the big flow frames into smaller ones
+#'
 #' @param flow_frame flow frame
 #' @param event_per_flow_frame numeric, the number of events to be split to 
 #' small flow frames, default is set to 500000  
@@ -1766,6 +1845,8 @@ split_flowFrames <- function(vec, seg.length) {
 #' to save fcs file, default 20000
 #' @param out_dir Character, pathway to where the files should be saved, 
 #' default is set to working directory.
+#' 
+#' @return save splitted fcs files in out_dir 
 
 split_big_flowFrames <- function(flow_frame, 
                                  event_per_flow_frame = 500000, 
@@ -1792,6 +1873,8 @@ split_big_flowFrames <- function(flow_frame,
 }
 
 
+#' extract_pctgs_msi_per_flowsom
+#' 
 #' @description performs FlowSOM clustering and extracts cluster and metacluster 
 #' frequency and MSI 
 #'
@@ -1809,10 +1892,10 @@ split_big_flowFrames <- function(flow_frame,
 #' @param n_metaclusters Numeric, exact number of clusters for metaclustering 
 #' in FlowSOM, default is set to 35
 #' @param out_dir Character, pathway to where the FlowSOM clustering plot should
-#' @param seed seed to be set to obtain reproducible results, default is set to 789
-#' @param arcsine_transform arcsine_transform Logical, if the data should be transformed with 
-#' arcsine transformation and cofactor 5, default is set to TRUE
 #' be saved, default is set to working directory.
+#' @param seed numeric, set to obtain reproducible results, default is set to 789
+#' @param arcsine_transform arcsine_transform Logical, if the data should 
+#' be transformed with arcsine transformation and cofactor 5, default is set to TRUE
 #'  
 #' @return list of four matrices that contain calculation for 
 #' cl_pctgs (cluster percentages), mcl_pctgs (metaclusters percentages), 
@@ -1880,7 +1963,7 @@ extract_pctgs_msi_per_flowsom <- function(file_list,
     ggplot2::ggsave(filename = paste0(f, "_FlowSOM.pdf"), plot = figure, device = "pdf", path = out_dir,
            width =24, height = 10)
     
-    # Define matrices for frequency (pctgs) calculation and MSI (mfi). These calculation is performed 
+    # Define matrices for frequency (pctgs) calculation and MSI (msi). These calculation is performed 
     # for clusters (cl) and metaclusters (mcl)
     cl_pctgs <- matrix(data = NA, nrow = length(file_list[[f]]),
                        ncol = xdim * ydim,
