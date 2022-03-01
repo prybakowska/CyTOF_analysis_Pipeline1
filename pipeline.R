@@ -85,6 +85,8 @@ plot_marker_quantiles(files_after_norm = files_a,
                       files_before_norm = files_b, 
                       batch_pattern = batch_pattern, 
                       arcsine_transform = TRUE,
+                      remove_beads = TRUE,
+                      bead_channel = "140", 
                       uncommon_prefix = "_beadNorm.fcs|.FCS", 
                       markers_to_plot = c("CD", "HLA", "IgD", "IL", "TNF",
                                           "TGF", "GR", "IFNa"),
@@ -251,7 +253,8 @@ for (i in seq_len(nrow(md))){
   print(paste0("Creating ", md[[i, "fcs_new_name"]]))
   
   aggregate_files(fcs_files = files_to_agg,
-                  outputFile = file.path(aggregate_dir, md[[i, "fcs_new_name"]]),
+                  outputFile = md[[i, "fcs_new_name"]],
+                  out_dir = aggregate_dir,
                   write_agg_file = TRUE)
 }
 
@@ -273,12 +276,12 @@ if (!dir.exists(gate_dir)) {
 }
 
 # List files for gating 
-files <- list.files(cytof_clean_dir, 
+files <- list.files(aggregate_dir, 
                     pattern = ".fcs$", 
                     full.names = TRUE)
 
 # Gate the files and plot the gating strategy for each file 
-n_plots <- 2  
+n_plots <- 3  
 png(file.path(gate_dir, paste0("gating.png")),
     width = n_plots * 300, 
     height = length(files) * 300)
@@ -292,7 +295,11 @@ for (file in files){
                            transformation = FALSE)
   
   ff <- gate_intact_cells(flow_frame = ff, 
-                          file_name = NULL)
+                          file_name = basename(file))
+  
+  ff <- gate_singlet_cells(flow_frame = ff,
+                           channels = "Event_length",
+                           file_name = basename(file))
   
   ff <- gate_live_cells(flow_frame = ff, 
                         viability_channel = "Pt195Di",

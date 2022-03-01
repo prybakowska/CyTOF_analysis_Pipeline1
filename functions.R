@@ -1254,7 +1254,7 @@ gate_live_cells <- function(flow_frame,
                             alpha_Iridium = 0.05,
                             arcsine_transform = TRUE, ... ){
   
-  ff <-  flow_frame
+  ff <- flow_frame
   
   if (is.null(file_name)){
     file_name <- ff@description$GUID.original
@@ -1312,7 +1312,7 @@ gate_live_cells <- function(flow_frame,
       selection[ff_t@exprs[,m] > tr[[m]][2], "live"] <- FALSE  
     }
   }
-  percentage <- (sum(selection[,"live"]/sum(selection)))*100  
+  percentage <- (sum(selection[,"live"])/sum(selection))*100  
   flowDensity::plotDens(ff_t, c(v_ch, "Ir191Di"), 
                         main = paste0(file_name," ( ", format(round(percentage, 2), nsmall = 2), "% )"),
                         xlim = c(0, 8), ylim = c(0, 8))
